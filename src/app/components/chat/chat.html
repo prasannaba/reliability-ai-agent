@@ -1,0 +1,41 @@
+<div class="chat-container">
+  <div class="chat-header">
+    <h2>Reliability Agent Chat</h2>
+  </div>
+  <div class="chat-messages" #messageContainer>
+    <div *ngFor="let msg of messages" class="message" [ngClass]="'message-' + msg.role">
+      <div class="message-content">
+        <markdown [data]="msg.content"></markdown>
+        <img *ngIf="msg.imageUrl" [src]="msg.imageUrl" alt="Generated Plot" class="chat-image">
+      </div>
+    </div>
+    <div *ngIf="isLoading" class="message message-assistant">
+      <div class="message-content">
+        <div class="typing-indicator">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="chat-input">
+    <div class="chat-toolbar">
+      <select [(ngModel)]="selectedExportFormat" name="selectedExportFormat">
+        <option *ngFor="let format of exportFormats" [value]="format.value">{{ format.label }}</option>
+      </select>
+      <button type="button" class="export-button" (click)="exportChat()">Export</button>
+    </div>
+    <form (ngSubmit)="sendMessage()" #chatForm="ngForm">
+      <input
+        type="text"
+        [(ngModel)]="userInput"
+        name="userInput"
+        placeholder="Enter your query here..."
+        autocomplete="off"
+        [disabled]="isLoading"
+      >
+      <button type="submit" [disabled]="!userInput || isLoading">Send</button>
+    </form>
+  </div>
+</div>

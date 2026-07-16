@@ -1,16 +1,11 @@
-import { Component, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { Component } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { ChatComponent } from './components/chat/chat';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
-  template: `
-    <h1>Welcome to {{ title() }}!</h1>
-
-    <router-outlet />
-  `,
-  styles: [],
+  standalone: true,
+  imports: [CommonModule, ChatComponent],
+  template: '<app-chat></app-chat>',
 })
-export class App {
-  protected readonly title = signal('frontend');
-}
+export class AppComponent {}
