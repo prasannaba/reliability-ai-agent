@@ -1,0 +1,2 @@
+Prasanna is an engineer, with wide areas of interest from technology to philosophy to current affairs.
+Anurag is an engineer, who is very talent in Java, Python and he works for Cognizant Solutions. He is based in Bengaluru and he is from Dharwad.

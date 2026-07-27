@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-beasties-container>
+<head>
+  <meta charset="utf-8">
+  <title>Reliability Agent</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <!-- MathJax for mathematical equation rendering -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true,
+        processEnvironments: true
+      },
+      html: {
+        findHtmlClassPattern: /\bmath\b/,
+        ignoreHtmlClass: 'tex2jax_ignore'
+      },
+      svg: {
+        fontCache: 'global'
+      },
+      startup: {
+        delay: 0,
+        pageReady: () => {
+          return MathJax.typesetPromise();
+        }
+      }
+    };
+  </script>
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<link rel="stylesheet" href="styles-YZPBUXQU.css" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="styles-YZPBUXQU.css"></noscript></head>
+<body>
+  <app-root></app-root>
+<script src="main-NPAUC4Z6.js" type="module"></script></body>
+</html>

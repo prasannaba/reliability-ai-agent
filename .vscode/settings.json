@@ -1,0 +1,9 @@
+{
+    "python.analysis.exclude": [
+        "**/.*",
+        "**/.venv",
+        "**/node_modules", "**/__pycache__"
+    ],
+    "python.analysis.showOnlyDirectDependenciesInAutoImport": true,
+    // "workbench.colorTheme": "Light 2026",
+}
