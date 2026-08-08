@@ -2,7 +2,6 @@ import argparse
 import sys
 import time
 import warnings
-
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -92,7 +91,7 @@ def calculate_b_life(beta, eta, percentage):
         float: The calculated B-Life.
     """
     F_t = percentage / 100.0
-    b_life = eta * (-np.log(1 - F_t))**(1 / beta)
+    b_life = eta * (-np.log(1 - F_t)) ** (1 / beta)
     b_life = np.round(b_life).astype(int)
     return b_life
 
@@ -119,7 +118,7 @@ def create_weibull_paper(ax, title):
     return prob_positions
 
 
-def plot_weibull_analysis(failure_times, title="Weibull Probability Plot"):
+def plot_weibull_analysis(failure_times, title="Weibull Probability Plot"):  # noqa: PLR0915
     """Main function to create Weibull analysis plot"""
     # Estimate parameters
     beta, eta, t_sorted, F, x_data, y_data = estimate_weibull_params(failure_times)
@@ -172,9 +171,7 @@ def plot_weibull_analysis(failure_times, title="Weibull Probability Plot"):
     y_fit = [np.log(-np.log(1 - cdf)) for cdf in cdf_values]
     x_fit = np.exp((np.array(y_fit) / beta + np.log(eta)))
 
-    ax1.plot(
-        x_fit, y_fit, color="black", linestyle="-", linewidth=2.0, label="Fitted Line"
-    )
+    ax1.plot(x_fit, y_fit, color="black", linestyle="-", linewidth=2.0, label="Fitted Line")
 
     # Highlight 63.2% probability (scale parameter)
     F_632 = 0.632
@@ -235,9 +232,7 @@ def plot_weibull_analysis(failure_times, title="Weibull Probability Plot"):
     ax1_1 = ax1.twiny()
     beta_values = [0.5, 1, 2, 3, 4, 5, 8, 10]
     ax1_1.set_xlim(np.log(ax1.get_xlim()))
-    ax1_1.set_xlabel(
-        "Shape Parameter (β) Reference", fontsize=10, fontweight="bold", color="purple"
-    )
+    ax1_1.set_xlabel("Shape Parameter (β) Reference", fontsize=10, fontweight="bold", color="purple")
     ax1_1.set_xscale("linear")
 
     # For each beta value, calculate where a line with that slope starting from
@@ -265,7 +260,7 @@ def plot_weibull_analysis(failure_times, title="Weibull Probability Plot"):
 
     # Add statistics box
     # MTBF=η⋅Γ(1+1/β​)
-    mtbf = eta * gamma(1 + 1 / (1 if abs(beta - 1) < 0.1 else beta))
+    mtbf = eta * gamma(1 + 1 / (1 if abs(beta - 1) < 0.1 else beta))  # noqa: PLR2004
     stats_text = "Weibull Parameters:\n"
     stats_text += f"Shape (β): {beta:.3f}\n"
     stats_text += f"Scale (η): {eta:.2f} hours\n"
@@ -283,15 +278,14 @@ def plot_weibull_analysis(failure_times, title="Weibull Probability Plot"):
     )
 
     # Perform Kolmogorov-Smirnov test
-    ks_stat, p_value = stats.kstest(
-        failure_times, lambda x: stats.weibull_min.cdf(x, beta, scale=eta)
-    )
+    ks_stat, p_value = stats.kstest(failure_times, lambda x: stats.weibull_min.cdf(x, beta, scale=eta))
 
     # Add goodness of fit text
     fit_text = "Goodness of Fit:\n"
     fit_text += f"K-S Statistic: {ks_stat:.4f}\n"
     fit_text += f"p-value: {p_value:.4f}\n"
-    if p_value > 0.05:
+    ALPHA_LEVEL = 0.05  # Threshold for significance level
+    if p_value > ALPHA_LEVEL:
         fit_text += "Good fit ✓"
     else:
         fit_text += "Poor fit ✗"
@@ -316,10 +310,10 @@ def plot_weibull_analysis(failure_times, title="Weibull Probability Plot"):
     ax2.legend()
 
     # Hazard Rate
-    beta = 1 if abs(beta - 1) < 0.1 else beta
-    hazard_function = stats.weibull_min.pdf(
+    beta = 1 if abs(beta - 1) < 0.1 else beta  # noqa: PLR2004
+    hazard_function = stats.weibull_min.pdf(t_sorted, c=beta, scale=eta) / stats.weibull_min.sf(
         t_sorted, c=beta, scale=eta
-    ) / stats.weibull_min.sf(t_sorted, c=beta, scale=eta)
+    )
     ax3.plot(t_sorted, hazard_function, color="black", linewidth=1.5)
     ax3.set_title("Hazard Rate (Trend)", fontsize=12, fontweight="bold", pad=5)
     ax3.set_xlabel("Time in Hours")
@@ -346,7 +340,7 @@ def plot_weibull_analysis(failure_times, title="Weibull Probability Plot"):
         "mtbf": mtbf,
         "ks_stat": ks_stat,
         "p_value": p_value,
-        "message": f"Weibull plot saved as {save_path}"
+        "message": f"Weibull plot saved as {save_path}",
     }
     # return fig, beta, eta, mtbf, ks_stat, p_value
 
@@ -398,12 +392,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.good_fit:
-        failure_times = stats.weibull_min.rvs(
-            c=args.shape, scale=args.scale, size=args.size, random_state=42
-        )
-        failure_times = np.ceil(failure_times).astype(
-            int
-        )  # Round up to nearest integer
+        failure_times = stats.weibull_min.rvs(c=args.shape, scale=args.scale, size=args.size, random_state=42)
+        failure_times = np.ceil(failure_times).astype(int)  # Round up to nearest integer
     elif args.poor_fit:
         # Generate two sets of data with different scales to simulate multi-modal distribution
         # Group 1: Failures that happen early (shorter failure times)
@@ -418,9 +408,7 @@ if __name__ == "__main__":
 
         # Combine the two groups to create a multi-modal distribution
         failure_times = np.concatenate([group_1, group_2])
-        failure_times = np.ceil(failure_times).astype(
-            int
-        )  # Round up to nearest integer
+        failure_times = np.ceil(failure_times).astype(int)  # Round up to nearest integer
     elif args.failure_data:
         failure_times = np.array(args.failure_data)
     else:
@@ -442,14 +430,14 @@ if __name__ == "__main__":
     print(f"  Shape (β): {params['beta']:.3f}")
     print(f"  Scale (η): {params['eta']:.2f}")
     # MTBF=η⋅Γ(1+1/β​)
-    mean_weibull = params['eta'] * gamma(1 + 1 / params['beta'])
+    mean_weibull = params["eta"] * gamma(1 + 1 / params["beta"])
     print(f"  Mean Time Between Failures (Weibull): {mean_weibull:.2f}")
 
     # Interpretation
     print("Interpretation:")
-    if params['beta'] < 1:
+    if params["beta"] < 1:
         print("  β < 1: Decreasing failure rate (infant mortality)")
-    elif abs(params['beta'] - 1) < 0.1:
+    elif abs(params["beta"] - 1) < 0.1:  # noqa: PLR2004
         print("  β ≈ 1: Constant failure rate (random failures)")
     else:
         print("  β > 1: Increasing failure rate (wear-out)")

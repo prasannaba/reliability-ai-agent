@@ -1,0 +1,9 @@
+fastapi>=0.139,<1
+llama-index-core>=0.14,<0.15
+llama-index-llms-openai-like>=0.6,<0.7
+matplotlib>=3.10,<4
+mcp>=1.28,<2
+numpy>=2.0,<3
+pydantic>=2.13,<3
+scipy>=1.15,<2
+uvicorn>=0.40,<1
