@@ -1,26 +1,12 @@
 # Reliability Copilot — backend
 
-Private copilot for reliability questions. Commercial solvers (ReliaSoft Weibull++, nCode, Minitab) stay optional via MCP later. This is **not** a ReliaSoft replacement.
+Private reliability engineering agent: FastAPI host, MCP tools, Weibull paper, hybrid RAG. Python **3.12+**, managed with **uv** (`pyproject.toml`). Copy `.env.example` to `.env` at the **repository root**. Having the file is not the same as having the model server listening on `LLM_API_BASE`.
 
-Python **3.12+**. Dependencies are managed with **uv** (`pyproject.toml`). Copy `.env.example` to `.env` at the **repository root**. Having the file is not the same as having the model server listening on `LLM_API_BASE`.
-
-## Run (hiring-manager demo)
-
-From `backend/`:
-
-```powershell
-uv sync --all-groups
-uv run python demo_copilot.py
-```
-
-That script always runs the **tools** (Weibull paper, B10 vs 200 h warranty, knowledge cite, `static/demo_report.md`). Those numbers do **not** go through the LLM — that is intentional, so an interview still works if the local model is down.
-
-If `LLM_API_BASE` in `.env` is already serving (OpenAI-compatible API), the same command then asks the agent one warranty question. Skip the LLM with `uv run python demo_copilot.py --no-llm`.
-
-The **browser chat UI** needs FastAPI:
+## Run
 
 ```powershell
 copy ..\.env.example ..\.env
+uv sync --all-groups
 uv run python main.py
 ```
 

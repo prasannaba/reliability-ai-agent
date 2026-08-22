@@ -63,6 +63,10 @@ Thumbs.db
 /.rag/
 /backend/.rag/
 
+# Local interview / tool-only demo (not published)
+/backend/demo_copilot.py
+/backend/static/demo_report.md
+
 # Generated plots and built UI (keep the ui folder itself)
 /backend/static/weibull_plot_*.png
 /backend/static/ui/**
