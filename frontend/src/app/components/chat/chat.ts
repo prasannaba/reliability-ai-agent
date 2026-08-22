@@ -253,6 +253,7 @@ export class ChatComponent implements OnInit, AfterViewInit {
       }
       printWindow.document.write(html);
       printWindow.document.close();
+      printWindow.document.title = 'Reliability Copilot';
       setTimeout(() => {
         printWindow.focus();
         printWindow.print();
@@ -321,10 +322,11 @@ export class ChatComponent implements OnInit, AfterViewInit {
     const clone = this.messageContainer?.nativeElement?.cloneNode(true) as HTMLElement | null;
     const contentHTML = clone ? clone.innerHTML : '';
 
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
-      body{font-family:Arial,sans-serif;line-height:1.5;padding:24px;color:#111;background:#fff}
-      h1{margin-bottom:16px}
-      .turn{display:flex;gap:12px;margin-bottom:20px}
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reliability Copilot</title><style>
+      @page{margin:0}
+      body{font-family:Arial,sans-serif;line-height:1.5;padding:16mm;color:#111;background:#fff}
+      h1{margin:0 0 16px;font-size:1.15rem}
+      .turn{display:flex;gap:12px;margin-bottom:20px;break-inside:avoid-page}
       .turn-user .turn-body{background:#e8e8ea;border-radius:18px;padding:10px 14px}
       .turn-body{word-break:break-word;overflow-wrap:anywhere;max-width:100%}
       .chat-image{max-width:100%;border-radius:8px;margin-top:10px;border:1px solid #ddd}
@@ -333,10 +335,19 @@ export class ChatComponent implements OnInit, AfterViewInit {
       code{background:#f5f5f5;padding:2px 4px;border-radius:4px}
       pre{background:#f5f5f5;padding:12px;border-radius:6px;overflow-x:auto}
       .MathJax{font-size:1em}
-      @media print{body{padding:0}.message{break-inside:avoid-page}}</style>
+      .thinking{margin:0 0 12px;width:100%}
+      .thinking-toggle{display:inline-flex;align-items:center;gap:8px;border:none;background:none;padding:0;font-size:0.92rem;color:#6b6b6b}
+      .thinking-icon{width:16px;height:16px;max-width:16px;max-height:16px;flex-shrink:0;display:block}
+      .thinking-icon.open{transform:rotate(90deg)}
+      .thinking-pulse{display:none}
+      .thinking-panel{margin-top:8px;background:#f0f0f2;border-radius:8px;border-left:2px solid #d0d0d4}
+      .thinking-text{margin:0;padding:10px 12px;font-size:0.88rem;white-space:pre-wrap;font-family:inherit}
+      .thinking-log{margin:0;padding:10px 12px 10px 26px;font-size:0.88rem}
+      @media print{body{padding:16mm}}
+    </style>
       <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
       <script>window.MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']],macros:{sb:['_{#1}',1]}},svg:{fontCache:'global'}};</script>
-    </head><body><h1>Chat Export</h1>${contentHTML}</body></html>`;
+    </head><body><h1>Reliability Copilot</h1>${contentHTML}</body></html>`;
   }
 
   private downloadBlob(blob: Blob, fileName: string): void {

@@ -59,7 +59,7 @@
               @if (thinkingEnabled && msg.role === 'assistant' && hasThinking(msg, $index)) {
                 <div class="thinking">
                   <button type="button" class="thinking-toggle" (click)="toggleThinking(msg)">
-                    <svg class="thinking-icon" [class.open]="msg.thinkingOpen" viewBox="0 0 16 16" aria-hidden="true">
+                    <svg class="thinking-icon" [class.open]="msg.thinkingOpen" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
                       <path fill="currentColor" d="M10.07 8.02 5.72 3.67l.62-.62L11 7.76v.51L6.33 13l-.62-.62 4.36-4.36z"/>
                     </svg>
                     <span>{{ thinkingTitle(msg, $index) }}</span>

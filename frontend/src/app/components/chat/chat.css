@@ -503,11 +503,19 @@
 
 @media print {
   .topbar-actions,
-  .composer-dock {
+  .composer-dock,
+  .models-banner {
     display: none !important;
   }
 
   .thread {
     overflow: visible;
+  }
+
+  .thinking-icon {
+    width: 16px !important;
+    height: 16px !important;
+    max-width: 16px !important;
+    max-height: 16px !important;
   }
 }
