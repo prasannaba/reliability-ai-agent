@@ -1,5 +1,4 @@
 import { Component, ViewChild, ElementRef, AfterViewInit, ChangeDetectorRef, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ChatService } from '../../services/chat';
 import { Message } from '../../models/message.model';
@@ -13,7 +12,7 @@ declare var MathJax: any;
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [CommonModule, FormsModule, MarkdownModule],
+  imports: [FormsModule, MarkdownModule],
   templateUrl: './chat.html',
   styleUrls: ['./chat.css']
 })

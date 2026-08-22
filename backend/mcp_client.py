@@ -33,6 +33,7 @@ class ReliabilityMCPClient:
         self._stack: AsyncExitStack | None = None
         self._sessions: dict[str, ClientSession] = {}
         self._tool_sessions: dict[str, ClientSession] = {}
+        self._llama_tools_cache: list[Any] | None = None
 
     def _extra_servers(self) -> dict[str, dict[str, Any]]:
         if not self.extra_config_path.exists():
@@ -88,6 +89,7 @@ class ReliabilityMCPClient:
             await stack.aclose()
             self._sessions = {}
             self._tool_sessions = {}
+            self._llama_tools_cache = None
             raise
 
         self._stack = stack
@@ -98,6 +100,7 @@ class ReliabilityMCPClient:
         self._stack = None
         self._sessions = {}
         self._tool_sessions = {}
+        self._llama_tools_cache = None
 
     async def list_tools(self) -> list[Any]:
         tools: list[Any] = []
@@ -144,11 +147,14 @@ class ReliabilityMCPClient:
         )
 
     async def llama_tools(self) -> list[Any]:
+        if self._llama_tools_cache is not None:
+            return self._llama_tools_cache
         from llama_index.core.tools import FunctionTool
 
         tools: list[Any] = []
         for tool in await self.list_tools():
             tools.append(self._to_llama_tool(FunctionTool, tool))
+        self._llama_tools_cache = tools
         return tools
 
     def _to_llama_tool(self, function_tool: Any, tool: Any) -> Any:

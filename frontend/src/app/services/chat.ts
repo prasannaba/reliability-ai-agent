@@ -8,11 +8,6 @@ export interface ChatRequest {
   thinking?: boolean;
 }
 
-export interface ChatResponse {
-  content: string;
-  image_url: string | null;
-}
-
 export type ChatStreamEvent =
   | { type: 'token'; text: string }
   | { type: 'thought'; text: string }
@@ -47,11 +42,6 @@ export interface LlmModelsResponse {
 })
 export class ChatService {
   constructor(private http: HttpClient) {}
-
-  sendMessage(prompt: string, model?: string): Observable<ChatResponse> {
-    const request: ChatRequest = { prompt, model };
-    return this.http.post<ChatResponse>('/api/chat', request);
-  }
 
   listModels(): Observable<LlmModelsResponse> {
     return this.http.get<LlmModelsResponse>('/api/models');

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
 from contextlib import asynccontextmanager
@@ -29,6 +31,11 @@ except ImportError:  # Support the documented `python main.py` launch from backe
     from mcp_client import ReliabilityMCPClient
 
 try:
+    from .markdown_math import patch_markdown_math
+except ImportError:
+    from markdown_math import patch_markdown_math
+
+try:
     from .knowledge_base import KNOWLEDGE_BASE_DIR, SUPPORTED_SUFFIXES, ReliabilityKnowledgeBase
 except ImportError:
     from knowledge_base import KNOWLEDGE_BASE_DIR, SUPPORTED_SUFFIXES, ReliabilityKnowledgeBase
@@ -39,13 +46,18 @@ STATIC_DIR.mkdir(exist_ok=True)
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 
+_PNG_NAME = re.compile(r"([A-Za-z0-9_.-]+\.png)")
+_MODELS_TTL_SECONDS = 20.0
+_models_cache: tuple[float, str, list[str]] | None = None
+
+
 def infer_latest_image_url(
     response_content: str,
     static_dir: Path | None = None,
     base_url: str | None = None,
 ) -> str | None:
     """Return an image URL only when the response names an existing plot."""
-    if not response_content:
+    if not response_content or ".png" not in response_content:
         return None
 
     static_dir = static_dir or STATIC_DIR
@@ -54,7 +66,7 @@ def infer_latest_image_url(
     if not static_dir.exists():
         return None
 
-    for filename in re.findall(r"([A-Za-z0-9_.-]+\.png)", response_content):
+    for filename in _PNG_NAME.findall(response_content):
         candidate = static_dir / filename
         if candidate.is_file():
             prefix = base_url.rstrip("/")
@@ -83,11 +95,6 @@ def extract_response_text(response_object: object) -> str:
 
 def normalize_response_content(response_content: str) -> str:
     """Add context when an agent returns only a generated plot filename."""
-    try:
-        from .markdown_math import patch_markdown_math
-    except ImportError:
-        from markdown_math import patch_markdown_math
-
     text = str(response_content or "").strip()
     if re.fullmatch(r"[A-Za-z0-9_.-]+\.png", text):
         return f"I created the Weibull plot for the supplied failure data: {text}"
@@ -302,6 +309,18 @@ def fetch_llm_models(timeout_seconds: float = 3.0) -> list[str]:
     return parse_openai_model_ids(payload)
 
 
+async def fetch_llm_models_cached() -> list[str]:
+    """Reuse /v1/models for a few seconds so status + chat do not block twice."""
+    global _models_cache
+    base = llm_api_base() or ""
+    now = time.monotonic()
+    if _models_cache and _models_cache[1] == base and now - _models_cache[0] < _MODELS_TTL_SECONDS:
+        return _models_cache[2]
+    models = await asyncio.to_thread(fetch_llm_models)
+    _models_cache = (now, base, models)
+    return models
+
+
 def _sse(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, default=str)}\n\n"
 
@@ -462,7 +481,7 @@ def create_app() -> FastAPI:
         chosen = (model or "").strip()
         if not chosen:
             try:
-                listed = fetch_llm_models()
+                listed = await fetch_llm_models_cached()
             except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError, RuntimeError) as exc:
                 raise HTTPException(status_code=503, detail=str(exc)) from exc
             chosen = pick_listed_model(listed, preferred_llm_model()) or ""
@@ -493,7 +512,7 @@ def create_app() -> FastAPI:
                 "error": LLM_UNCONFIGURED,
             }
         try:
-            models = fetch_llm_models()
+            models = await fetch_llm_models_cached()
         except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError, RuntimeError) as exc:
             return {
                 "configured": True,
