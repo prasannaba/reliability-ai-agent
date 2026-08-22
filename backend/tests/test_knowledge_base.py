@@ -7,7 +7,7 @@ from pptx import Presentation
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from knowledge_base import ReliabilityKnowledgeBase, SUPPORTED_SUFFIXES, _split_text, load_document
+from knowledge_base import SUPPORTED_SUFFIXES, ReliabilityKnowledgeBase, _split_text, load_document
 
 
 class FakeEmbedder:
@@ -77,7 +77,12 @@ def test_incremental_hybrid_index_and_search(tmp_path):
 
 
 def test_token_split_packs_paragraphs_by_word_count():
-    chunks = _split_text("alpha beta gamma\n\ndelta epsilon", max_tokens=3, overlap=1, count_tokens=lambda text: len(text.split()))
+    chunks = _split_text(
+        "alpha beta gamma\n\ndelta epsilon",
+        max_tokens=3,
+        overlap=1,
+        count_tokens=lambda text: len(text.split()),
+    )
     assert chunks
     assert all(len(chunk.split()) <= 4 for chunk in chunks)
 
@@ -85,7 +90,9 @@ def test_token_split_packs_paragraphs_by_word_count():
 def test_search_does_not_require_full_collection_scan(tmp_path, monkeypatch):
     knowledge_dir = tmp_path / "Knowledge_Base"
     knowledge_dir.mkdir()
-    (knowledge_dir / "standard.md").write_text("# Weibull\n\nThe shape parameter is beta.", encoding="utf-8")
+    (knowledge_dir / "standard.md").write_text(
+        "# Weibull\n\nThe shape parameter is beta.", encoding="utf-8"
+    )
     knowledge_base = ReliabilityKnowledgeBase(
         knowledge_base_dir=knowledge_dir,
         index_dir=tmp_path / ".rag",

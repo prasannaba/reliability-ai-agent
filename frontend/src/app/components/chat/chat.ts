@@ -1,11 +1,21 @@
-import { Component, ViewChild, ElementRef, AfterViewInit, ChangeDetectorRef, OnInit } from '@angular/core';
+import {
+  Component,
+  ViewChild,
+  ElementRef,
+  AfterViewInit,
+  ChangeDetectorRef,
+  OnInit,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ChatService } from '../../services/chat';
 import { Message } from '../../models/message.model';
 import { MarkdownModule } from 'ngx-markdown';
 import { patchMarkdownMath } from '../../utils/math-markdown';
 
-interface ExportFormat { label: string; value: 'markdown' | 'html' | 'pdf'; }
+interface ExportFormat {
+  label: string;
+  value: 'markdown' | 'html' | 'pdf';
+}
 
 declare var MathJax: any;
 
@@ -14,7 +24,7 @@ declare var MathJax: any;
   standalone: true,
   imports: [FormsModule, MarkdownModule],
   templateUrl: './chat.html',
-  styleUrls: ['./chat.css']
+  styleUrls: ['./chat.css'],
 })
 export class ChatComponent implements OnInit, AfterViewInit {
   @ViewChild('messageContainer') private messageContainer!: ElementRef;
@@ -27,7 +37,7 @@ export class ChatComponent implements OnInit, AfterViewInit {
   exportFormats: ExportFormat[] = [
     { label: 'Markdown', value: 'markdown' },
     { label: 'HTML', value: 'html' },
-    { label: 'PDF', value: 'pdf' }
+    { label: 'PDF', value: 'pdf' },
   ];
   selectedExportFormat: ExportFormat['value'] = 'markdown';
   models: string[] = [];
@@ -38,13 +48,14 @@ export class ChatComponent implements OnInit, AfterViewInit {
 
   constructor(
     private chatService: ChatService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
   ) {}
 
   ngOnInit() {
     this.messages.push({
       role: 'assistant',
-      content: 'Reliability Copilot — ask a life-data or handbook question. Numbers come from tools, not guesses. Attach a procedure on the prompt if you want it in the knowledge base.'
+      content:
+        'Reliability Copilot — ask a life-data or handbook question. Numbers come from tools, not guesses. Attach a procedure on the prompt if you want it in the knowledge base.',
     });
     this.loadThinkingPref();
     this.refreshKnowledgeStatus();
@@ -156,42 +167,49 @@ export class ChatComponent implements OnInit, AfterViewInit {
     const assistantMessage: Message = {
       role: 'assistant',
       content: '',
-      thinkingOpen: this.thinkingEnabled
+      thinkingOpen: this.thinkingEnabled,
     };
     this.messages.push(assistantMessage);
     this.cdr.detectChanges();
     this.scrollToBottom();
 
     try {
-      await this.chatService.streamMessage(currentInput, (event) => {
-        if (event.type === 'token') {
-          const first = !assistantMessage.content;
-          assistantMessage.content += event.text;
-          if (first) {
-            assistantMessage.thinkingOpen = false;
+      await this.chatService.streamMessage(
+        currentInput,
+        (event) => {
+          if (event.type === 'token') {
+            const first = !assistantMessage.content;
+            assistantMessage.content += event.text;
+            if (first) {
+              assistantMessage.thinkingOpen = false;
+            }
+          } else if (event.type === 'thought') {
+            this.appendThinkingText(assistantMessage, event.text);
+          } else if (event.type === 'tool_start') {
+            this.appendThought(assistantMessage, `Using ${this.formatToolName(event.name)}`);
+          } else if (event.type === 'tool_end') {
+            this.appendThought(assistantMessage, `Finished ${this.formatToolName(event.name)}`);
+          } else if (event.type === 'image') {
+            assistantMessage.imageUrl = event.url;
+          } else if (event.type === 'done') {
+            if (event.content) {
+              assistantMessage.content = event.content;
+            }
+            if (event.image_url) {
+              assistantMessage.imageUrl = event.image_url;
+            }
+          } else if (event.type === 'error') {
+            assistantMessage.content = event.message;
           }
-        } else if (event.type === 'thought') {
-          this.appendThinkingText(assistantMessage, event.text);
-        } else if (event.type === 'tool_start') {
-          this.appendThought(assistantMessage, `Using ${this.formatToolName(event.name)}`);
-        } else if (event.type === 'tool_end') {
-          this.appendThought(assistantMessage, `Finished ${this.formatToolName(event.name)}`);
-        } else if (event.type === 'image') {
-          assistantMessage.imageUrl = event.url;
-        } else if (event.type === 'done') {
-          if (event.content) {
-            assistantMessage.content = event.content;
-          }
-          if (event.image_url) {
-            assistantMessage.imageUrl = event.image_url;
-          }
-        } else if (event.type === 'error') {
-          assistantMessage.content = event.message;
-        }
-        this.scheduleRender();
-      }, undefined, this.selectedModel || undefined, this.thinkingEnabled);
+          this.scheduleRender();
+        },
+        undefined,
+        this.selectedModel || undefined,
+        this.thinkingEnabled,
+      );
     } catch (err) {
-      assistantMessage.content = 'Sorry, something went wrong. Please check the backend connection.';
+      assistantMessage.content =
+        'Sorry, something went wrong. Please check the backend connection.';
       console.error(err);
     } finally {
       this.isLoading = false;
@@ -227,7 +245,7 @@ export class ChatComponent implements OnInit, AfterViewInit {
         this.knowledgeSummary = 'Could not upload that document.';
         console.error(err);
         input.value = '';
-      }
+      },
     });
   }
 
@@ -235,7 +253,10 @@ export class ChatComponent implements OnInit, AfterViewInit {
     const markdown = this.buildExportMarkdown();
 
     if (this.selectedExportFormat === 'markdown') {
-      this.downloadBlob(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }), 'chat-export.md');
+      this.downloadBlob(
+        new Blob([markdown], { type: 'text/markdown;charset=utf-8' }),
+        'chat-export.md',
+      );
       return;
     }
 
@@ -243,7 +264,10 @@ export class ChatComponent implements OnInit, AfterViewInit {
       const html = this.buildExportHtml();
 
       if (this.selectedExportFormat === 'html') {
-        this.downloadBlob(new Blob([html], { type: 'text/html;charset=utf-8' }), 'chat-export.html');
+        this.downloadBlob(
+          new Blob([html], { type: 'text/html;charset=utf-8' }),
+          'chat-export.html',
+        );
         return;
       }
 
@@ -271,8 +295,9 @@ export class ChatComponent implements OnInit, AfterViewInit {
       error: () => {
         this.models = [];
         this.selectedModel = '';
-        this.modelsHint = 'Could not load models. Set LLM_API_BASE in the repo-root .env (see .env.example).';
-      }
+        this.modelsHint =
+          'Could not load models. Set LLM_API_BASE in the repo-root .env (see .env.example).';
+      },
     });
   }
 
@@ -283,7 +308,7 @@ export class ChatComponent implements OnInit, AfterViewInit {
       },
       error: () => {
         this.knowledgeSummary = '';
-      }
+      },
     });
   }
 
@@ -309,7 +334,7 @@ export class ChatComponent implements OnInit, AfterViewInit {
           `## ${label}`,
           message.content || '',
           message.imageUrl ? `![plot](${message.imageUrl})` : '',
-          ''
+          '',
         ].filter(Boolean);
         return lines.join('\n');
       })
@@ -385,7 +410,8 @@ export class ChatComponent implements OnInit, AfterViewInit {
   private scrollToBottom(): void {
     setTimeout(() => {
       try {
-        this.messageContainer.nativeElement.scrollTop = this.messageContainer.nativeElement.scrollHeight;
+        this.messageContainer.nativeElement.scrollTop =
+          this.messageContainer.nativeElement.scrollHeight;
       } catch (err) {
         console.error('Could not scroll to bottom:', err);
       }

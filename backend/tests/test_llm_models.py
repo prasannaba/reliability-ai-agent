@@ -3,7 +3,12 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from main import StreamThoughtSplitter, parse_openai_model_ids, pick_listed_model, split_thinking_from_answer
+from main import (
+    StreamThoughtSplitter,
+    parse_openai_model_ids,
+    pick_listed_model,
+    split_thinking_from_answer,
+)
 
 
 def test_parse_openai_model_ids_from_llama_cpp_payload():

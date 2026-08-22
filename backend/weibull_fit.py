@@ -76,7 +76,9 @@ def fit_mle(failure_times: np.ndarray, censored_times: np.ndarray) -> tuple[floa
         beta, eta = params
         if beta <= 1e-6 or eta <= 1e-6:
             return 1e12
-        log_pdf = np.log(beta / eta) + (beta - 1.0) * np.log(failures / eta) - (failures / eta) ** beta
+        log_pdf = (
+            np.log(beta / eta) + (beta - 1.0) * np.log(failures / eta) - (failures / eta) ** beta
+        )
         log_sf = -((censored / eta) ** beta) if len(censored) else 0.0
         return float(-np.sum(log_pdf) - np.sum(log_sf))
 
@@ -131,7 +133,9 @@ def bootstrap_bounds(
     etas: list[float] = []
     for _ in range(samples):
         fail_draw = rng.choice(failures, size=len(failures), replace=True)
-        cens_draw = rng.choice(censored, size=len(censored), replace=True) if len(censored) else censored
+        cens_draw = (
+            rng.choice(censored, size=len(censored), replace=True) if len(censored) else censored
+        )
         try:
             fit = fit_weibull(fail_draw, cens_draw, method=method)
         except (ValueError, FloatingPointError, np.linalg.LinAlgError):

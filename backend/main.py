@@ -9,9 +9,10 @@ import re
 import time
 import urllib.error
 import urllib.request
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 import uvicorn
 from dotenv import load_dotenv
@@ -482,7 +483,13 @@ def create_app() -> FastAPI:
         if not chosen:
             try:
                 listed = await fetch_llm_models_cached()
-            except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError, RuntimeError) as exc:
+            except (
+                urllib.error.URLError,
+                TimeoutError,
+                OSError,
+                json.JSONDecodeError,
+                RuntimeError,
+            ) as exc:
                 raise HTTPException(status_code=503, detail=str(exc)) from exc
             chosen = pick_listed_model(listed, preferred_llm_model()) or ""
         if not chosen:
@@ -513,7 +520,13 @@ def create_app() -> FastAPI:
             }
         try:
             models = await fetch_llm_models_cached()
-        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError, RuntimeError) as exc:
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            OSError,
+            json.JSONDecodeError,
+            RuntimeError,
+        ) as exc:
             return {
                 "configured": True,
                 "models": [],
@@ -555,13 +568,19 @@ def create_app() -> FastAPI:
         KNOWLEDGE_BASE_DIR.mkdir(parents=True, exist_ok=True)
         destination = KNOWLEDGE_BASE_DIR / filename
         destination.write_bytes(await file.read())
-        return {"source": filename, "indexed": False, "message": "Saved. The next knowledge search will embed this file."}
+        return {
+            "source": filename,
+            "indexed": False,
+            "message": "Saved. The next knowledge search will embed this file.",
+        }
 
     @app.post("/api/chat", response_model=ChatResponse)
     async def chat_endpoint(request: ChatRequest) -> ChatResponse:
         try:
             await apply_chat_model(request.model)
-            response_object = await app.state.agent.run(user_msg=request.prompt, ctx=app.state.agent_context)
+            response_object = await app.state.agent.run(
+                user_msg=request.prompt, ctx=app.state.agent_context
+            )
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"Agent inference failed: {exc}") from exc
 

@@ -9,7 +9,9 @@ import numpy as np
 
 def register(mcp: Any) -> None:
     @mcp.tool()
-    def calculate_mtbf(failure_times: list[float], censored_times: list[float] | None = None) -> dict[str, float]:
+    def calculate_mtbf(
+        failure_times: list[float], censored_times: list[float] | None = None
+    ) -> dict[str, float]:
         """Estimate MTBF from failure times and optional right-censored run times."""
         if not failure_times:
             raise ValueError("at least one failure time is required")

@@ -1,38 +1,44 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Reliability Agent</title>
-  <base href="/">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
-  <!-- MathJax for mathematical equation rendering -->
-  <script>
-    window.MathJax = {
-      tex: {
-        inlineMath: [['$', '$'], ['\\(', '\\)']],
-        displayMath: [['$$', '$$'], ['\\[', '\\]']],
-        processEscapes: true,
-        processEnvironments: true,
-        macros: {
-          sb: ["_{#1}", 1]
-        }
-      },
-      html: {
-        findHtmlClassPattern: /\bmath\b/,
-        ignoreHtmlClass: 'tex2jax_ignore'
-      },
-      svg: {
-        fontCache: 'global'
-      },
-      startup: {
-        delay: 0
-      }
-    };
-  </script>
-  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-</head>
-<body>
-  <app-root></app-root>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <title>Reliability Agent</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <!-- MathJax for mathematical equation rendering -->
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [
+            ['$', '$'],
+            ['\\(', '\\)'],
+          ],
+          displayMath: [
+            ['$$', '$$'],
+            ['\\[', '\\]'],
+          ],
+          processEscapes: true,
+          processEnvironments: true,
+          macros: {
+            sb: ['_{#1}', 1],
+          },
+        },
+        html: {
+          findHtmlClassPattern: /\bmath\b/,
+          ignoreHtmlClass: 'tex2jax_ignore',
+        },
+        svg: {
+          fontCache: 'global',
+        },
+        startup: {
+          delay: 0,
+        },
+      };
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  </head>
+  <body>
+    <app-root></app-root>
+  </body>
 </html>

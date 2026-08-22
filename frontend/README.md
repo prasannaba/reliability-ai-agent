@@ -1,59 +1,48 @@
-# Frontend
+# Reliability Copilot — frontend
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.0.2.
+Angular 21 chat UI for the local Reliability Copilot. Single page: thread, composer (Enter to send, Shift+Enter for a new line), attachments, model picker, foldable thinking, Weibull plots, and markdown with MathJax (`\sb{...}` for subscripts so markdown does not eat `_`).
 
-## Development server
+The UI talks to the FastAPI backend. It does not compute Weibull or search the knowledge base itself.
 
-To start a local development server, run:
+## Development
 
-```bash
-ng serve
+Needs Node.js and npm. From `frontend/`:
+
+```powershell
+npm install
+npm start
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+`npm start` runs `ng serve` on `http://localhost:4200`. `proxy.conf.json` forwards `/api`, `/static`, and `/health` to `http://localhost:8000`, so run the backend first (`cd backend` then `uv run python main.py`).
 
-## Code scaffolding
+## Production (served by FastAPI)
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+From the repo root:
 
-```bash
-ng generate component component-name
+```powershell
+.\scripts\build_ui.ps1
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+That runs `npm run build` (production) and copies `dist/frontend/browser` into `backend/static/ui`. Then `uv run python main.py` serves the UI at `http://localhost:8000`.
 
-```bash
-ng generate --help
+## Format
+
+Prettier options live in `package.json` (`printWidth` 100, `singleQuote`, Angular HTML parser). Prettier is not an npm dependency; use a one-off run from `frontend/`:
+
+```powershell
+npx --yes prettier@3 --write "src/**/*.{ts,html,css,json}" "angular.json" "package.json" "tsconfig.json" "tsconfig.app.json" "proxy.conf.json"
 ```
 
-## Building
+Check without writing:
 
-To build the project run:
-
-```bash
-ng build
+```powershell
+npx --yes prettier@3 --check "src/**/*.{ts,html,css,json}" "angular.json" "package.json" "tsconfig.json" "tsconfig.app.json" "proxy.conf.json"
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+Do not format `dist/`, `node_modules/`, or `.angular/`.
 
-## Running unit tests
+## Notes
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+- Chat uses `POST /api/chat/stream` (`prompt`, `model`, `thinking`). Models come from `GET /api/models`.
+- MathJax is loaded in `src/index.html` (not KaTeX). The app has no Angular router.
+- `npm run watch` rebuilds in development configuration without the proxy.

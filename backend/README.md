@@ -1,6 +1,8 @@
-# Reliability Copilot — 15 minutes
+# Reliability Copilot — backend
 
 Private copilot for reliability questions. Commercial solvers (ReliaSoft Weibull++, nCode, Minitab) stay optional via MCP later. This is **not** a ReliaSoft replacement.
+
+Python **3.12+**. Dependencies are managed with **uv** (`pyproject.toml`). Copy `.env.example` to `.env` at the **repository root**. Having the file is not the same as having the model server listening on `LLM_API_BASE`.
 
 ## Run (hiring-manager demo)
 
@@ -11,18 +13,18 @@ uv sync --all-groups
 uv run python demo_copilot.py
 ```
 
-That script always runs the **tools** (Weibull paper, B10 vs 200 h warranty, knowledge cite, `static/demo_report.md`). Those numbers do **not** go through the LLM — that is intentional, so an interview still works if llama.cpp is down.
+That script always runs the **tools** (Weibull paper, B10 vs 200 h warranty, knowledge cite, `static/demo_report.md`). Those numbers do **not** go through the LLM — that is intentional, so an interview still works if the local model is down.
 
-If `LLM_API_BASE` in `.env` is already serving (your local OpenAI-compatible model), the same command then asks the agent one warranty question. You do **not** need a second process for that one-shot. Skip the LLM with `uv run python demo_copilot.py --no-llm`.
+If `LLM_API_BASE` in `.env` is already serving (OpenAI-compatible API), the same command then asks the agent one warranty question. Skip the LLM with `uv run python demo_copilot.py --no-llm`.
 
-The **browser chat UI** still needs `uv run python main.py` (FastAPI). `.env` is loaded from the repo root; having the file is not the same as having the model server listening on that URL.
+The **browser chat UI** needs FastAPI:
 
 ```powershell
 copy ..\.env.example ..\.env
 uv run python main.py
 ```
 
-Open `http://localhost:8000`. If the Angular app is not built yet, run `..\scripts\build_ui.ps1` first, or `ng serve` in `frontend/` (proxies `/api`).
+Open `http://localhost:8000`. If the Angular app is not built yet, run `..\scripts\build_ui.ps1` first, or `ng serve` in `frontend/` (proxies `/api`, `/static`, and `/health` to this process).
 
 Ask:
 
@@ -30,22 +32,32 @@ Ask:
 
 Metrics come from tools, not from the model.
 
-## Python 3.12+ with uv
+Optional: `scripts/start.ps1` from the repo root, or `scripts/start-desktop.ps1` for the WebView wrapper.
+
+Settings: `LLM_API_BASE`, `LLM_API_KEY`, optional `LLM_MODEL` (only if it appears in `GET {base}/models`), `FRONTEND_ORIGIN` (comma-separated), `PUBLIC_BASE_URL` (leave empty for same-origin `/static` URLs), `PORT`, `EMBEDDING_MODEL`.
+
+## Lint and format
+
+Ruff is configured in `pyproject.toml` (line length 100; rules `E`, `F`, `I`, `W`, `UP`). From `backend/`:
 
 ```powershell
-cd backend
-uv sync --all-groups
+uvx ruff format .
+uvx ruff check .
 ```
 
-Copy `.env.example` to `.env` at the repository root. Keep real credentials only in `.env`.
+Auto-fix safe issues (import order and the selected rules):
 
-Optional: `scripts/start.ps1` from the repo root, or `scripts/start-desktop.ps1` for the WebView wrapper. Tests: `uv run pytest`.
+```powershell
+uvx ruff check . --fix
+```
 
-Settings: `LLM_API_KEY`, `FRONTEND_ORIGIN` (comma-separated), `PUBLIC_BASE_URL` (leave empty for same-origin `/static` URLs), `PORT`, `EMBEDDING_MODEL`.
+Pylint-style complexity and magic-number rules are not enabled. Fixing them would mean splitting APIs, eager-loading optional imports (Docling, LlamaIndex, WebView), or renaming numeric thresholds.
+
+Tests: `uv run pytest`.
 
 ## Knowledge base
 
-Accepted files: `.md`, `.txt`, `.pdf`, `.doc`, `.docx`, `.ppt`, `.pptx`. Drop files into `Knowledge_Base/` or attach them on the chat prompt. Docling extracts PDF and Office files locally.
+Accepted files: `.md`, `.txt`, `.pdf`, `.doc`, `.docx`, `.ppt`, `.pptx`. Drop files into `Knowledge_Base/` (repo root) or attach them on the chat prompt. Docling extracts PDF and Office files locally. The vector index lives under `backend/.rag`.
 
 ```powershell
 uv run python knowledge_base.py
@@ -62,9 +74,11 @@ uv run python knowledge_base.py --download-model
 
 Plugins: `backend/plugins/<name>.py` with `def register(mcp):`. Extra stdio servers: `backend/mcp_servers.json`.
 
-Host: `uv run python mcp_server.py` (see `mcp_llamacpp.json`).
+Host: `uv run python mcp_server.py`.
 
-## Chat API
+## HTTP API
 
-- `POST /api/chat` and `POST /api/chat/stream`
+- `GET /health`
+- `GET /api/models`
 - `GET /api/knowledge/status` and `POST /api/knowledge/upload`
+- `POST /api/chat` and `POST /api/chat/stream` — body includes `prompt`, `model`, and `thinking`

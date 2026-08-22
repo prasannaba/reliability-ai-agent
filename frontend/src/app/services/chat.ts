@@ -38,7 +38,7 @@ export interface LlmModelsResponse {
 }
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class ChatService {
   constructor(private http: HttpClient) {}
@@ -54,7 +54,10 @@ export class ChatService {
   uploadDocument(file: File): Observable<{ source: string; indexed: boolean; message: string }> {
     const body = new FormData();
     body.append('file', file);
-    return this.http.post<{ source: string; indexed: boolean; message: string }>('/api/knowledge/upload', body);
+    return this.http.post<{ source: string; indexed: boolean; message: string }>(
+      '/api/knowledge/upload',
+      body,
+    );
   }
 
   async streamMessage(
@@ -62,13 +65,13 @@ export class ChatService {
     onEvent: (event: ChatStreamEvent) => void,
     signal?: AbortSignal,
     model?: string,
-    thinking = true
+    thinking = true,
   ): Promise<void> {
     const response = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify({ prompt, model, thinking } satisfies ChatRequest),
-      signal
+      signal,
     });
 
     if (!response.ok || !response.body) {

@@ -6,10 +6,11 @@ import hashlib
 import json
 import os
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
-from typing import Any, Callable
+from typing import Any
 
 import chromadb
 from dotenv import load_dotenv
@@ -41,7 +42,7 @@ class KnowledgeChunk:
 
     @property
     def identifier(self) -> str:
-        raw = f"{self.source}\0{self.chunk_number}\0{self.text}".encode("utf-8")
+        raw = f"{self.source}\0{self.chunk_number}\0{self.text}".encode()
         return hashlib.sha256(raw).hexdigest()
 
     def metadata(self) -> dict[str, str | int]:
@@ -135,7 +136,9 @@ def _split_text(
     return chunks
 
 
-def _load_text_document(path: Path, source: str, count_tokens: TokenCounter | None = None) -> list[KnowledgeChunk]:
+def _load_text_document(
+    path: Path, source: str, count_tokens: TokenCounter | None = None
+) -> list[KnowledgeChunk]:
     text = path.read_text(encoding="utf-8", errors="replace")
     chunks: list[KnowledgeChunk] = []
     section: str | None = None
@@ -169,13 +172,17 @@ def _docling_page(meta: Any) -> int | None:
     return None
 
 
-def _load_rich_document(path: Path, source: str, count_tokens: TokenCounter | None = None) -> list[KnowledgeChunk]:
+def _load_rich_document(
+    path: Path, source: str, count_tokens: TokenCounter | None = None
+) -> list[KnowledgeChunk]:
     """Use Docling locally for layout-aware PDF and Office extraction."""
     try:
         from docling.chunking import HierarchicalChunker
         from docling.document_converter import DocumentConverter
     except ImportError as exc:  # pragma: no cover - depends on optional system package
-        raise RuntimeError("PDF and Office ingestion requires Docling; install backend/requirements.txt") from exc
+        raise RuntimeError(
+            "PDF and Office ingestion requires Docling; install backend/requirements.txt"
+        ) from exc
 
     document = DocumentConverter().convert(source=str(path)).document
     chunker = HierarchicalChunker()
@@ -238,7 +245,9 @@ class LexicalIndex:
             return
         self.ids = list(payload.get("ids") or [])
         self.tokenized = [list(tokens) for tokens in payload.get("tokenized") or []]
-        self.sources = {str(key): str(value) for key, value in (payload.get("sources") or {}).items()}
+        self.sources = {
+            str(key): str(value) for key, value in (payload.get("sources") or {}).items()
+        }
         if len(self.tokenized) != len(self.ids):
             self.ids, self.tokenized, self.sources = [], [], {}
 
@@ -247,7 +256,9 @@ class LexicalIndex:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(
-            json.dumps({"ids": self.ids, "tokenized": self.tokenized, "sources": self.sources}, indent=2),
+            json.dumps(
+                {"ids": self.ids, "tokenized": self.tokenized, "sources": self.sources}, indent=2
+            ),
             encoding="utf-8",
         )
         self._dirty = False
@@ -275,7 +286,9 @@ class LexicalIndex:
             self.remove_source(chunks[0].source)
         for chunk in chunks:
             self.ids.append(chunk.identifier)
-            self.tokenized.append(tokenize_query(chunk.text) or tokenize_query(chunk.source) or ["document"])
+            self.tokenized.append(
+                tokenize_query(chunk.text) or tokenize_query(chunk.source) or ["document"]
+            )
             self.sources[chunk.identifier] = chunk.source
             self._dirty = True
 
@@ -314,8 +327,12 @@ class ReliabilityKnowledgeBase:
         self.knowledge_base_dir = knowledge_base_dir
         self.index_dir = index_dir
         self.manifest_path = index_dir / "manifest.json"
-        self.embedding_model_name = embedding_model_name or os.getenv("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL)
-        self.embedding_local_files_only = os.getenv("EMBEDDING_LOCAL_FILES_ONLY", "true").casefold() not in {
+        self.embedding_model_name = embedding_model_name or os.getenv(
+            "EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL
+        )
+        self.embedding_local_files_only = os.getenv(
+            "EMBEDDING_LOCAL_FILES_ONLY", "true"
+        ).casefold() not in {
             "0",
             "false",
             "no",
@@ -362,7 +379,9 @@ class ReliabilityKnowledgeBase:
         if self._collection is None:
             self.index_dir.mkdir(parents=True, exist_ok=True)
             self._client = chromadb.PersistentClient(path=str(self.index_dir / "chroma"))
-            self._collection = self._client.get_or_create_collection(COLLECTION_NAME, metadata={"hnsw:space": "cosine"})
+            self._collection = self._client.get_or_create_collection(
+                COLLECTION_NAME, metadata={"hnsw:space": "cosine"}
+            )
         return self._collection
 
     def _lexical_index(self) -> LexicalIndex:
@@ -372,7 +391,11 @@ class ReliabilityKnowledgeBase:
         return self._lexical
 
     def _empty_manifest(self) -> dict[str, Any]:
-        return {"schema": MANIFEST_SCHEMA, "embedding_model": self.embedding_model_name, "files": {}}
+        return {
+            "schema": MANIFEST_SCHEMA,
+            "embedding_model": self.embedding_model_name,
+            "files": {},
+        }
 
     def _read_manifest(self) -> dict[str, Any]:
         if not self.manifest_path.exists():
@@ -390,14 +413,19 @@ class ReliabilityKnowledgeBase:
             self._client.delete_collection(COLLECTION_NAME)
         except ValueError:
             pass
-        self._collection = self._client.get_or_create_collection(COLLECTION_NAME, metadata={"hnsw:space": "cosine"})
+        self._collection = self._client.get_or_create_collection(
+            COLLECTION_NAME, metadata={"hnsw:space": "cosine"}
+        )
         lexical = self._lexical_index()
         lexical.clear()
         lexical.save()
 
     def _manifest(self) -> dict[str, Any]:
         manifest = self._read_manifest()
-        if manifest.get("schema") != MANIFEST_SCHEMA or manifest.get("embedding_model") != self.embedding_model_name:
+        if (
+            manifest.get("schema") != MANIFEST_SCHEMA
+            or manifest.get("embedding_model") != self.embedding_model_name
+        ):
             self._reset_store()
             return self._empty_manifest()
         return manifest
@@ -418,12 +446,18 @@ class ReliabilityKnowledgeBase:
         lexical_path = self.index_dir / "bm25.json"
         if current_paths and not lexical_path.exists():
             return False
-        return all(old_files.get(source, {}).get("sha256") == _file_digest(path) for source, path in current_paths.items())
+        return all(
+            old_files.get(source, {}).get("sha256") == _file_digest(path)
+            for source, path in current_paths.items()
+        )
 
     def ensure_index(self, force: bool = False) -> list[str]:
         """Synchronize changed files and return non-fatal conversion warnings."""
         with self._lock:
-            current_paths = {path.relative_to(self.knowledge_base_dir).as_posix(): path for path in self._documents()}
+            current_paths = {
+                path.relative_to(self.knowledge_base_dir).as_posix(): path
+                for path in self._documents()
+            }
             stored = self._read_manifest()
             if (
                 not force
@@ -448,11 +482,15 @@ class ReliabilityKnowledgeBase:
                 if not force and old_files.get(source, {}).get("sha256") == digest:
                     continue
                 try:
-                    chunks = load_document(path, self.knowledge_base_dir, count_tokens=self._token_count)
+                    chunks = load_document(
+                        path, self.knowledge_base_dir, count_tokens=self._token_count
+                    )
                     if not chunks:
                         raise RuntimeError("conversion produced no searchable text")
                     embeddings = self.embedder.encode(
-                        [chunk.text for chunk in chunks], normalize_embeddings=True, show_progress_bar=False
+                        [chunk.text for chunk in chunks],
+                        normalize_embeddings=True,
+                        show_progress_bar=False,
                     ).tolist()
                     self.collection.delete(where={"source": source})
                     lexical.remove_source(source)
@@ -497,7 +535,9 @@ class ReliabilityKnowledgeBase:
             return {"query": query, "matches": [], "index_warnings": warnings}
 
         candidate_count = min(max(max_results * 4, 12), self.collection.count())
-        query_embedding = self.embedder.encode([query], normalize_embeddings=True, show_progress_bar=False).tolist()
+        query_embedding = self.embedder.encode(
+            [query], normalize_embeddings=True, show_progress_bar=False
+        ).tolist()
         vector = self.collection.query(
             query_embeddings=query_embedding,
             n_results=candidate_count,
@@ -509,13 +549,17 @@ class ReliabilityKnowledgeBase:
         for rank, identifier in enumerate(vector_ids, start=1):
             rankings[identifier] = rankings.get(identifier, 0.0) + 1.0 / (60 + rank)
 
-        for rank, (identifier, _) in enumerate(self._lexical_index().query(query, candidate_count), start=1):
+        for rank, (identifier, _) in enumerate(
+            self._lexical_index().query(query, candidate_count), start=1
+        ):
             rankings[identifier] = rankings.get(identifier, 0.0) + 1.0 / (60 + rank)
 
         if not rankings:
             return {"query": query, "matches": [], "index_warnings": warnings}
 
-        ranked_ids = sorted(rankings, key=lambda identifier: (-rankings[identifier], identifier))[:max_results]
+        ranked_ids = sorted(rankings, key=lambda identifier: (-rankings[identifier], identifier))[
+            :max_results
+        ]
         fetched = self.collection.get(ids=ranked_ids, include=["documents", "metadatas"])
         records = {
             identifier: (document, metadata)
@@ -545,7 +589,9 @@ def main() -> None:
     if "--download-model" in os.sys.argv:
         knowledge_base.embedding_local_files_only = False
     warnings = knowledge_base.ensure_index(force="--force" in os.sys.argv)
-    print(f"Indexed {knowledge_base.collection.count()} chunks with {knowledge_base.embedding_model_name}")
+    print(
+        f"Indexed {knowledge_base.collection.count()} chunks with {knowledge_base.embedding_model_name}"
+    )
     for warning in warnings:
         print(f"Warning: {warning}")
 

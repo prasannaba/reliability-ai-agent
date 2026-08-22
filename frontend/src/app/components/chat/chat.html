@@ -13,7 +13,7 @@
           [(ngModel)]="thinkingEnabled"
           name="thinkingEnabled"
           (ngModelChange)="persistThinkingPref()"
-        >
+        />
         Thinking
       </label>
       <label class="model-picker">
@@ -32,7 +32,11 @@
           }
         </select>
       </label>
-      <select [(ngModel)]="selectedExportFormat" name="selectedExportFormat" aria-label="Export format">
+      <select
+        [(ngModel)]="selectedExportFormat"
+        name="selectedExportFormat"
+        aria-label="Export format"
+      >
         @for (format of exportFormats; track format.value) {
           <option [value]="format.value">{{ format.label }}</option>
         }
@@ -47,7 +51,11 @@
   <div class="thread" #messageContainer>
     <div class="thread-inner">
       @for (msg of messages; track $index) {
-        <article class="turn" [class.turn-user]="msg.role === 'user'" [class.turn-assistant]="msg.role === 'assistant'">
+        <article
+          class="turn"
+          [class.turn-user]="msg.role === 'user'"
+          [class.turn-assistant]="msg.role === 'assistant'"
+        >
           @if (msg.role === 'assistant') {
             <div class="avatar" aria-hidden="true">RC</div>
           }
@@ -59,8 +67,18 @@
               @if (thinkingEnabled && msg.role === 'assistant' && hasThinking(msg, $index)) {
                 <div class="thinking">
                   <button type="button" class="thinking-toggle" (click)="toggleThinking(msg)">
-                    <svg class="thinking-icon" [class.open]="msg.thinkingOpen" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-                      <path fill="currentColor" d="M10.07 8.02 5.72 3.67l.62-.62L11 7.76v.51L6.33 13l-.62-.62 4.36-4.36z"/>
+                    <svg
+                      class="thinking-icon"
+                      [class.open]="msg.thinkingOpen"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 16 16"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fill="currentColor"
+                        d="M10.07 8.02 5.72 3.67l.62-.62L11 7.76v.51L6.33 13l-.62-.62 4.36-4.36z"
+                      />
                     </svg>
                     <span>{{ thinkingTitle(msg, $index) }}</span>
                     @if (isLoading && $index === messages.length - 1) {
@@ -89,8 +107,10 @@
                 <markdown [data]="displayContent(msg.content)"></markdown>
               }
               @if (msg.imageUrl) {
-                <img [src]="msg.imageUrl" alt="Generated plot" class="chat-image">
-                <button type="button" class="download-plot" (click)="downloadPlot(msg.imageUrl)">Download plot</button>
+                <img [src]="msg.imageUrl" alt="Generated plot" class="chat-image" />
+                <button type="button" class="download-plot" (click)="downloadPlot(msg.imageUrl)">
+                  Download plot
+                </button>
               }
             </div>
           </div>
@@ -104,7 +124,11 @@
       <label class="attach-btn" title="Attach a procedure">
         <span class="attach-icon" aria-hidden="true">+</span>
         <span class="sr-only">Attach</span>
-        <input type="file" accept=".md,.txt,.pdf,.doc,.docx,.ppt,.pptx" (change)="onDocumentSelected($event)">
+        <input
+          type="file"
+          accept=".md,.txt,.pdf,.doc,.docx,.ppt,.pptx"
+          (change)="onDocumentSelected($event)"
+        />
       </label>
       <textarea
         #promptBox
@@ -119,7 +143,7 @@
       ></textarea>
       <button type="submit" class="send-btn" [disabled]="!canSend" aria-label="Send">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path fill="currentColor" d="M3.4 20.6 21 12 3.4 3.4 3.3 10.2 15 12 3.3 13.8z"/>
+          <path fill="currentColor" d="M3.4 20.6 21 12 3.4 3.4 3.3 10.2 15 12 3.3 13.8z" />
         </svg>
       </button>
     </form>

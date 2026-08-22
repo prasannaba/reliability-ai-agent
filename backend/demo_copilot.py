@@ -10,6 +10,7 @@ import urllib.request
 from pathlib import Path
 
 from dotenv import load_dotenv
+
 from knowledge_base import KNOWLEDGE_BASE_DIR, ReliabilityKnowledgeBase
 from life_data_analysis_weibull import plot_weibull_analysis
 from reliability_report import build_reliability_report
@@ -33,7 +34,12 @@ def _knowledge_cite() -> list[dict]:
     except Exception:
         handbook = KNOWLEDGE_BASE_DIR / "weibull_analysis.md"
         if handbook.exists():
-            return [{"source": "weibull_analysis.md", "content": handbook.read_text(encoding="utf-8")[:280]}]
+            return [
+                {
+                    "source": "weibull_analysis.md",
+                    "content": handbook.read_text(encoding="utf-8")[:280],
+                }
+            ]
         return []
 
 
@@ -80,8 +86,12 @@ def run_tools_demo() -> dict:
     report_path.write_text(report, encoding="utf-8")
     print("1) Tool path (no LLM) — this is the hiring-manager proof")
     print(f"  plot: {analysis['file']}")
-    print(f"  method: {analysis['method']}  failures={analysis['n_failures']}  suspensions={analysis['n_censored']}")
-    print(f"  beta={analysis['beta']:.3f}  eta={analysis['eta']:.1f} h  MTBF={analysis['mtbf']:.1f} h")
+    print(
+        f"  method: {analysis['method']}  failures={analysis['n_failures']}  suspensions={analysis['n_censored']}"
+    )
+    print(
+        f"  beta={analysis['beta']:.3f}  eta={analysis['eta']:.1f} h  MTBF={analysis['mtbf']:.1f} h"
+    )
     print(f"  B10={analysis['b10']:.1f} h vs warranty {WARRANTY_HOURS:g} h")
     if citations:
         print(f"  KB: {citations[0].get('source')}")
@@ -91,6 +101,7 @@ def run_tools_demo() -> dict:
 
 async def run_llm_turn() -> None:
     from llama_index.core.workflow import Context
+
     from main import (
         build_agent,
         extract_response_text,
@@ -122,7 +133,11 @@ async def run_llm_turn() -> None:
 def main() -> None:
     from main import LLM_UNCONFIGURED
 
-    skip_llm = "--no-llm" in sys.argv or os.getenv("DEMO_SKIP_LLM", "").strip() in {"1", "true", "yes"}
+    skip_llm = "--no-llm" in sys.argv or os.getenv("DEMO_SKIP_LLM", "").strip() in {
+        "1",
+        "true",
+        "yes",
+    }
     run_tools_demo()
     print()
     if skip_llm:
@@ -130,7 +145,9 @@ def main() -> None:
         return
     if not llm_base():
         print(LLM_UNCONFIGURED)
-        print("You do not need an LLM for the numbers above. For chat: set .env then uv run python main.py")
+        print(
+            "You do not need an LLM for the numbers above. For chat: set .env then uv run python main.py"
+        )
         return
     if not llm_is_reachable():
         print(f"LLM not reachable at {llm_base()} (start llama.cpp / vLLM / Ollama).")

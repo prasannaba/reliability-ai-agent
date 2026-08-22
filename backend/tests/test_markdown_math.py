@@ -36,7 +36,9 @@ def test_b10_uses_sb_macro_not_raw_underscore():
 
 def test_does_not_wrap_function_argument_in_extra_dollars():
     assert "F($B$)" not in patch_markdown_math(r"$F(B)$")
-    assert patch_markdown_math("reliability F($B$) of the fleet") == "reliability $F(B)$ of the fleet"
+    assert (
+        patch_markdown_math("reliability F($B$) of the fleet") == "reliability $F(B)$ of the fleet"
+    )
 
 
 def test_display_math_keeps_b10_and_uses_dollars():

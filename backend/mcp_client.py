@@ -27,7 +27,9 @@ JSON_TYPE_MAP = {
 
 
 class ReliabilityMCPClient:
-    def __init__(self, server_path: Path | None = None, extra_config_path: Path | None = None) -> None:
+    def __init__(
+        self, server_path: Path | None = None, extra_config_path: Path | None = None
+    ) -> None:
         self.server_path = server_path or Path(__file__).with_name("mcp_server.py")
         self.extra_config_path = extra_config_path or DEFAULT_SERVERS_CONFIG
         self._stack: AsyncExitStack | None = None
@@ -45,7 +47,9 @@ class ReliabilityMCPClient:
         servers = payload.get("mcpServers") or payload.get("servers") or {}
         return servers if isinstance(servers, dict) else {}
 
-    async def _open_session(self, stack: AsyncExitStack, command: str, args: list[str], cwd: str | None) -> ClientSession:
+    async def _open_session(
+        self, stack: AsyncExitStack, command: str, args: list[str], cwd: str | None
+    ) -> ClientSession:
         read_stream, write_stream = await stack.enter_async_context(
             stdio_client(
                 StdioServerParameters(
@@ -79,7 +83,9 @@ class ReliabilityMCPClient:
                     continue
                 args = [str(value) for value in spec.get("args") or []]
                 cwd = spec.get("cwd") or str(self.server_path.parent)
-                self._sessions[str(name)] = await self._open_session(stack, str(command), args, str(cwd))
+                self._sessions[str(name)] = await self._open_session(
+                    stack, str(command), args, str(cwd)
+                )
 
             for session in self._sessions.values():
                 listed = await session.list_tools()
@@ -135,9 +141,13 @@ class ReliabilityMCPClient:
             {"beta": beta, "eta": eta, "percentage": percentage},
         )
 
-    async def analyze_weibull(self, failure_times: list[float], title: str = "Weibull Probability Plot") -> str:
+    async def analyze_weibull(
+        self, failure_times: list[float], title: str = "Weibull Probability Plot"
+    ) -> str:
         """Fit Weibull failure data, create a plot, and return fit statistics."""
-        return await self.call_tool("analyze_weibull", {"failure_times": failure_times, "title": title})
+        return await self.call_tool(
+            "analyze_weibull", {"failure_times": failure_times, "title": title}
+        )
 
     async def search_reliability_knowledge(self, query: str, max_results: int = 3) -> str:
         """Search local reliability and organizational documentation."""
@@ -160,10 +170,14 @@ class ReliabilityMCPClient:
     def _to_llama_tool(self, function_tool: Any, tool: Any) -> Any:
         name = str(tool.name)
         description = str(getattr(tool, "description", None) or name)
-        schema = getattr(tool, "input_schema", None) or getattr(tool, "inputSchema", None) or {
-            "type": "object",
-            "properties": {},
-        }
+        schema = (
+            getattr(tool, "input_schema", None)
+            or getattr(tool, "inputSchema", None)
+            or {
+                "type": "object",
+                "properties": {},
+            }
+        )
         model = _model_from_json_schema(name, schema)
 
         async def _fn(**kwargs: Any) -> str:

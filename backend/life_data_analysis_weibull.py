@@ -164,7 +164,9 @@ def plot_weibull_analysis(  # noqa: PLR0915
     )
 
     if len(censored):
-        y_suspensions = np.log(np.log(1.0 / (1.0 - np.clip(weibull_cdf(censored, beta, eta), 1e-6, 1 - 1e-6))))
+        y_suspensions = np.log(
+            np.log(1.0 / (1.0 - np.clip(weibull_cdf(censored, beta, eta), 1e-6, 1 - 1e-6)))
+        )
         ax1.plot(
             censored,
             y_suspensions,
@@ -179,7 +181,9 @@ def plot_weibull_analysis(  # noqa: PLR0915
     cdf_values = np.linspace(0.001, 0.999, 100)
     y_fit = np.log(-np.log(1 - cdf_values))
     x_fit = eta * ((-np.log(1 - cdf_values)) ** (1 / beta))
-    ax1.plot(x_fit, y_fit, color="black", linestyle="-", linewidth=2.0, label="Fitted line", zorder=3)
+    ax1.plot(
+        x_fit, y_fit, color="black", linestyle="-", linewidth=2.0, label="Fitted line", zorder=3
+    )
 
     if bounds.get("available"):
         x_low = []
@@ -187,7 +191,9 @@ def plot_weibull_analysis(  # noqa: PLR0915
         for cdf in cdf_values:
             xs = [
                 sample_eta * ((-np.log(1 - cdf)) ** (1 / sample_beta))
-                for sample_beta, sample_eta in zip(bounds["samples"]["beta"], bounds["samples"]["eta"])
+                for sample_beta, sample_eta in zip(
+                    bounds["samples"]["beta"], bounds["samples"]["eta"]
+                )
             ]
             alpha = (1.0 - confidence) / 2.0
             x_low.append(np.percentile(xs, 100 * alpha))
@@ -234,12 +240,24 @@ def plot_weibull_analysis(  # noqa: PLR0915
     ax1_1 = ax1.twiny()
     beta_values = [0.5, 1, 2, 3, 4, 5, 8, 10]
     ax1_1.set_xlim(np.log(ax1.get_xlim()))
-    ax1_1.set_xlabel("Shape Parameter (β) Reference", fontsize=10, fontweight="bold", color="purple")
+    ax1_1.set_xlabel(
+        "Shape Parameter (β) Reference", fontsize=10, fontweight="bold", color="purple"
+    )
     ax1_1.set_xscale("linear")
     beta_positions = [(y_max - y_632) / b for b in beta_values]
     ax1_1.set_xticks(beta_positions)
     ax1_1.set_xticklabels([f"{b}" for b in beta_values], color="purple", fontsize=8)
-    ax1_1.plot(x_top, y_max, "v", markersize=10, color="purple", markeredgewidth=2, markeredgecolor="darkviolet", clip_on=False, zorder=10)
+    ax1_1.plot(
+        x_top,
+        y_max,
+        "v",
+        markersize=10,
+        color="purple",
+        markeredgewidth=2,
+        markeredgecolor="darkviolet",
+        clip_on=False,
+        zorder=10,
+    )
 
     mtbf_value = fit["mtbf"]
     method_label = "MLE" if fit["method"] == "mle" else "median ranks + rank regression on Y (RRY)"
@@ -284,14 +302,26 @@ def plot_weibull_analysis(  # noqa: PLR0915
 
     ax1.legend(loc="lower right", fontsize=8, framealpha=0.9)
 
-    ax2.hist(t_sorted, bins=min(8, max(3, len(t_sorted) // 2)), color="blue", edgecolor="white", label="Failures")
+    ax2.hist(
+        t_sorted,
+        bins=min(8, max(3, len(t_sorted) // 2)),
+        color="blue",
+        edgecolor="white",
+        label="Failures",
+    )
     ax2.set_title("Histogram", fontsize=12, fontweight="bold", pad=5)
     ax2.set_xlabel("Time in Hours")
     ax2.set_ylabel("Frequency of Failure")
     ax2.legend()
 
-    t_grid = np.linspace(max(t_sorted.min() * 0.5, 1e-6), max(t_sorted.max(), float(np.max(censored) if len(censored) else 0), eta), 80)
-    hazard_function = stats.weibull_min.pdf(t_grid, c=beta, scale=eta) / stats.weibull_min.sf(t_grid, c=beta, scale=eta)
+    t_grid = np.linspace(
+        max(t_sorted.min() * 0.5, 1e-6),
+        max(t_sorted.max(), float(np.max(censored) if len(censored) else 0), eta),
+        80,
+    )
+    hazard_function = stats.weibull_min.pdf(t_grid, c=beta, scale=eta) / stats.weibull_min.sf(
+        t_grid, c=beta, scale=eta
+    )
     ax3.plot(t_grid, hazard_function, color="black", linewidth=1.5)
     ax3.set_title("Hazard Rate (Trend)", fontsize=12, fontweight="bold", pad=5)
     ax3.set_xlabel("Time in Hours")
@@ -380,7 +410,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.good_fit:
-        failure_times = stats.weibull_min.rvs(c=args.shape, scale=args.scale, size=args.size, random_state=42)
+        failure_times = stats.weibull_min.rvs(
+            c=args.shape, scale=args.scale, size=args.size, random_state=42
+        )
         failure_times = np.ceil(failure_times).astype(int)  # Round up to nearest integer
     elif args.poor_fit:
         # Generate two sets of data with different scales to simulate multi-modal distribution
@@ -431,7 +463,11 @@ if __name__ == "__main__":
         print("  β > 1: Increasing failure rate (wear-out)")
 
     print(f"  63.2% of failures occur by time η = {params['eta']:.2f}")
-    print(f"  The B-10 life: {calculate_b_life(beta=params['beta'], eta=params['eta'], percentage=10)} hours")
-    print(f"  The B-20 life: {calculate_b_life(beta=params['beta'], eta=params['eta'], percentage=20)} hours")
+    print(
+        f"  The B-10 life: {calculate_b_life(beta=params['beta'], eta=params['eta'], percentage=10)} hours"
+    )
+    print(
+        f"  The B-20 life: {calculate_b_life(beta=params['beta'], eta=params['eta'], percentage=20)} hours"
+    )
     print()
     print("=" * 60)

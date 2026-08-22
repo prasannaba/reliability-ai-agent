@@ -32,7 +32,11 @@ def test_rry_recovers_order_of_magnitude():
 
 
 def test_mle_accepts_censoring():
-    fit = fit_weibull(np.array([100.0, 180.0, 250.0, 400.0]), censored_times=np.array([500.0, 500.0]), method="mle")
+    fit = fit_weibull(
+        np.array([100.0, 180.0, 250.0, 400.0]),
+        censored_times=np.array([500.0, 500.0]),
+        method="mle",
+    )
     assert fit["n_failures"] == 4
     assert fit["n_censored"] == 2
     assert fit["beta"] > 0
