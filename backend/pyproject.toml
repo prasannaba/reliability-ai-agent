@@ -1,5 +1,5 @@
 [project]
-name = "reliability-ai-agent-backend"
+name = "reliability-copilot-backend"
 version = "0.1.0"
 description = "Local-first reliability engineering agent with MCP tools and FastAPI."
 readme = "README.md"

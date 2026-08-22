@@ -92,7 +92,7 @@ flowchart LR
 **Contract:** β, η, MTBF, B10/B20/B30, and plot files are produced by Python (SciPy / Matplotlib, MCP). The LLM may only *use* those results.
 
 ```
-reliability-ai-agent/
+reliability-copilot/
   Knowledge_Base/     handbooks, procedures, domain notes
   backend/            FastAPI, MCP server, Weibull, RAG
   frontend/           Angular chat (proxies to :8000 in dev)
