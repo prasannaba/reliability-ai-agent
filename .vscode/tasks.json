@@ -1,0 +1,45 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Sync backend with uv",
+      "type": "shell",
+      "command": "uv",
+      "args": [
+        "sync",
+        "--all-groups"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "detail": "Creates backend/.venv and installs locked dependencies.",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Run MCP server",
+      "type": "shell",
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "mcp_server.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "detail": "Launches the reliability MCP server over stdio.",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    }
+  ]
+}

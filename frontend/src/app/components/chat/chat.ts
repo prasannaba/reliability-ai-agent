@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ChatService } from '../../services/chat';
 import { Message } from '../../models/message.model';
 import { MarkdownModule } from 'ngx-markdown';
+import { patchMarkdownMath } from '../../utils/math-markdown';
 
 interface ExportFormat { label: string; value: 'markdown' | 'html' | 'pdf'; }
 
@@ -18,16 +19,23 @@ declare var MathJax: any;
 })
 export class ChatComponent implements OnInit, AfterViewInit {
   @ViewChild('messageContainer') private messageContainer!: ElementRef;
+  @ViewChild('promptBox') private promptBox?: ElementRef<HTMLTextAreaElement>;
 
   messages: Message[] = [];
   userInput: string = '';
-  isLoading: boolean = false;
+  isLoading = false;
+  knowledgeSummary: string = '';
   exportFormats: ExportFormat[] = [
     { label: 'Markdown', value: 'markdown' },
     { label: 'HTML', value: 'html' },
     { label: 'PDF', value: 'pdf' }
   ];
   selectedExportFormat: ExportFormat['value'] = 'markdown';
+  models: string[] = [];
+  selectedModel = '';
+  modelsHint = '';
+  thinkingEnabled = true;
+  private thinkingStartedAt = 0;
 
   constructor(
     private chatService: ChatService,
@@ -37,9 +45,11 @@ export class ChatComponent implements OnInit, AfterViewInit {
   ngOnInit() {
     this.messages.push({
       role: 'assistant',
-      content: 'Hello! How can I help you with your reliability analysis today?'
+      content: 'Reliability Copilot — ask a life-data or handbook question. Numbers come from tools, not guesses. Attach a procedure on the prompt if you want it in the knowledge base.'
     });
-    // Render initial math
+    this.loadThinkingPref();
+    this.refreshKnowledgeStatus();
+    this.refreshModels();
     setTimeout(() => this.renderMath(), 100);
   }
 
@@ -47,44 +57,177 @@ export class ChatComponent implements OnInit, AfterViewInit {
     this.scrollToBottom();
   }
 
-  sendMessage() {
-    if (!this.userInput.trim()) {
+  get canSend(): boolean {
+    return !!this.userInput.trim() && !this.isLoading && !!this.selectedModel;
+  }
+
+  displayContent(content: string): string {
+    return patchMarkdownMath(content || '');
+  }
+
+  hasThinking(msg: Message, index: number): boolean {
+    if (this.isLoading && index === this.messages.length - 1 && msg.role === 'assistant') {
+      return true;
+    }
+    return !!msg.thinkingText?.trim() || !!msg.thinkingSteps?.length;
+  }
+
+  thinkingTitle(msg: Message, index: number): string {
+    const running = this.isLoading && index === this.messages.length - 1;
+    if (running) {
+      return 'Thinking';
+    }
+    const seconds = Math.max(1, Math.round((msg.thinkingMs ?? 0) / 1000));
+    return `Thought · ${seconds}s`;
+  }
+
+  toggleThinking(msg: Message): void {
+    msg.thinkingOpen = !msg.thinkingOpen;
+  }
+
+  shortModelName(id: string): string {
+    const slash = id.replace(/\\/g, '/').split('/').pop() || id;
+    return slash.length > 48 ? `${slash.slice(0, 45)}…` : slash;
+  }
+
+  persistThinkingPref(): void {
+    localStorage.setItem('reliability-copilot-thinking', this.thinkingEnabled ? '1' : '0');
+  }
+
+  private loadThinkingPref(): void {
+    this.thinkingEnabled = localStorage.getItem('reliability-copilot-thinking') !== '0';
+  }
+
+  private appendThinkingText(msg: Message, chunk: string): void {
+    if (!this.thinkingEnabled || !chunk) {
+      return;
+    }
+    msg.thinkingText = `${msg.thinkingText || ''}${chunk}`;
+    msg.thinkingOpen = true;
+  }
+
+  private appendThought(msg: Message, step: string): void {
+    if (!this.thinkingEnabled) {
+      return;
+    }
+    const text = step.replace(/\s+/g, ' ').trim();
+    if (!text) {
+      return;
+    }
+    const steps = msg.thinkingSteps ?? (msg.thinkingSteps = []);
+    if (steps[steps.length - 1] === text) {
+      return;
+    }
+    steps.push(text);
+    msg.thinkingOpen = true;
+  }
+
+  private formatToolName(name: string): string {
+    return name.replace(/_/g, ' ');
+  }
+
+  onPromptKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void this.sendMessage();
+    }
+  }
+
+  resizePrompt(): void {
+    const el = this.promptBox?.nativeElement;
+    if (!el) {
+      return;
+    }
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }
+
+  async sendMessage() {
+    if (!this.userInput.trim() || this.isLoading) {
       return;
     }
 
-    // Add user message to chat
     const userMessage: Message = { role: 'user', content: this.userInput };
     this.messages.push(userMessage);
     this.isLoading = true;
+    this.thinkingStartedAt = Date.now();
     const currentInput = this.userInput;
-    this.userInput = ''; // Clear input immediately
+    this.userInput = '';
+    this.resizePrompt();
+    const assistantMessage: Message = {
+      role: 'assistant',
+      content: '',
+      thinkingOpen: this.thinkingEnabled
+    };
+    this.messages.push(assistantMessage);
     this.cdr.detectChanges();
     this.scrollToBottom();
 
-    // Call service and handle response
-    this.chatService.sendMessage(currentInput).subscribe({
-      next: (response) => {
-        const assistantMessage: Message = {
-          role: 'assistant',
-          content: response.content,
-          imageUrl: response.image_url || undefined
-        };
-        this.messages.push(assistantMessage);
-        this.isLoading = false;
-        this.cdr.detectChanges();
-        this.scrollToBottom();
-        // Trigger MathJax rendering after content is added to DOM
-        setTimeout(() => this.renderMath(), 100);
+    try {
+      await this.chatService.streamMessage(currentInput, (event) => {
+        if (event.type === 'token') {
+          const first = !assistantMessage.content;
+          assistantMessage.content += event.text;
+          if (first) {
+            assistantMessage.thinkingOpen = false;
+          }
+        } else if (event.type === 'thought') {
+          this.appendThinkingText(assistantMessage, event.text);
+        } else if (event.type === 'tool_start') {
+          this.appendThought(assistantMessage, `Using ${this.formatToolName(event.name)}`);
+        } else if (event.type === 'tool_end') {
+          this.appendThought(assistantMessage, `Finished ${this.formatToolName(event.name)}`);
+        } else if (event.type === 'image') {
+          assistantMessage.imageUrl = event.url;
+        } else if (event.type === 'done') {
+          if (event.content) {
+            assistantMessage.content = event.content;
+          }
+          if (event.image_url) {
+            assistantMessage.imageUrl = event.image_url;
+          }
+        } else if (event.type === 'error') {
+          assistantMessage.content = event.message;
+        }
+        this.scheduleRender();
+      }, undefined, this.selectedModel || undefined, this.thinkingEnabled);
+    } catch (err) {
+      assistantMessage.content = 'Sorry, something went wrong. Please check the backend connection.';
+      console.error(err);
+    } finally {
+      this.isLoading = false;
+      assistantMessage.thinkingMs = Date.now() - this.thinkingStartedAt;
+      assistantMessage.thinkingOpen = false;
+      this.cdr.detectChanges();
+      this.scrollToBottom();
+      setTimeout(() => this.renderMath(), 100);
+    }
+  }
+
+  downloadPlot(imageUrl: string): void {
+    const fileName = imageUrl.split('/').pop() || 'weibull-plot.png';
+    fetch(imageUrl)
+      .then((response) => response.blob())
+      .then((blob) => this.downloadBlob(blob, fileName))
+      .catch((err) => console.error(err));
+  }
+
+  onDocumentSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) {
+      return;
+    }
+    this.chatService.uploadDocument(file).subscribe({
+      next: (result) => {
+        this.knowledgeSummary = `${result.source} saved. It will be indexed on the next knowledge search.`;
+        this.refreshKnowledgeStatus();
+        input.value = '';
       },
       error: (err) => {
-        const errorMessage: Message = {
-          role: 'assistant',
-          content: 'Sorry, something went wrong. Please check the backend connection.'
-        };
-        this.messages.push(errorMessage);
-        this.isLoading = false;
-        this.scrollToBottom();
+        this.knowledgeSummary = 'Could not upload that document.';
         console.error(err);
+        input.value = '';
       }
     });
   }
@@ -118,6 +261,45 @@ export class ChatComponent implements OnInit, AfterViewInit {
     });
   }
 
+  private refreshModels(): void {
+    this.chatService.listModels().subscribe({
+      next: (result) => {
+        this.models = result.models || [];
+        this.selectedModel = result.current || this.models[0] || '';
+        this.modelsHint = result.error || '';
+      },
+      error: () => {
+        this.models = [];
+        this.selectedModel = '';
+        this.modelsHint = 'Could not load models. Set LLM_API_BASE in the repo-root .env (see .env.example).';
+      }
+    });
+  }
+
+  private refreshKnowledgeStatus(): void {
+    this.chatService.knowledgeStatus().subscribe({
+      next: (status) => {
+        this.knowledgeSummary = `${status.files.length} knowledge files, ${status.chunk_count} chunks`;
+      },
+      error: () => {
+        this.knowledgeSummary = '';
+      }
+    });
+  }
+
+  private renderHandle = 0;
+
+  private scheduleRender(): void {
+    if (this.renderHandle) {
+      return;
+    }
+    this.renderHandle = requestAnimationFrame(() => {
+      this.renderHandle = 0;
+      this.cdr.detectChanges();
+      this.scrollToBottom();
+    });
+  }
+
   private buildExportMarkdown(): string {
     const sections = this.messages
       .filter((message) => message.role === 'user' || message.role === 'assistant')
@@ -143,12 +325,9 @@ export class ChatComponent implements OnInit, AfterViewInit {
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
       body{font-family:Arial,sans-serif;line-height:1.5;padding:24px;color:#111;background:#fff}
       h1{margin-bottom:16px}
-      .message{display:flex;max-width:100%;margin-bottom:12px}
-      .message-user{justify-content:flex-end}
-      .message-user .message-content{background:#007bff;color:#fff}
-      .message-assistant{justify-content:flex-start}
-      .message-assistant .message-content{background:#e9ecef;color:#111}
-      .message-content{padding:10px 15px;border-radius:18px;word-break:break-word;overflow-wrap:anywhere;max-width:100%}
+      .turn{display:flex;gap:12px;margin-bottom:20px}
+      .turn-user .turn-body{background:#e8e8ea;border-radius:18px;padding:10px 14px}
+      .turn-body{word-break:break-word;overflow-wrap:anywhere;max-width:100%}
       .chat-image{max-width:100%;border-radius:8px;margin-top:10px;border:1px solid #ddd}
       p{margin:0 0 8px}
       ul{margin:0 0 8px 20px}
@@ -157,7 +336,7 @@ export class ChatComponent implements OnInit, AfterViewInit {
       .MathJax{font-size:1em}
       @media print{body{padding:0}.message{break-inside:avoid-page}}</style>
       <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-      <script>window.MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']]},svg:{fontCache:'global'}};</script>
+      <script>window.MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']],macros:{sb:['_{#1}',1]}},svg:{fontCache:'global'}};</script>
     </head><body><h1>Chat Export</h1>${contentHTML}</body></html>`;
   }
 
@@ -194,7 +373,6 @@ export class ChatComponent implements OnInit, AfterViewInit {
   }
 
   private scrollToBottom(): void {
-    // Use a timeout to ensure the DOM has updated before scrolling
     setTimeout(() => {
       try {
         this.messageContainer.nativeElement.scrollTop = this.messageContainer.nativeElement.scrollHeight;

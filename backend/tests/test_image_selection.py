@@ -19,8 +19,8 @@ def test_infer_latest_image_url_prefers_latest_generated_file(tmp_path):
     # make sure the newer path is detected if the content mentions it
     response_content = "Here is the latest figure: weibull_plot_2.png"
 
-    image_url = infer_latest_image_url(response_content, static_dir)
-    assert image_url == "http://localhost:8000/static/weibull_plot_2.png"
+    image_url = infer_latest_image_url(response_content, static_dir, base_url="")
+    assert image_url == "/static/weibull_plot_2.png"
 
 
 def test_infer_latest_image_url_falls_back_to_default_filename(tmp_path):
@@ -30,5 +30,5 @@ def test_infer_latest_image_url_falls_back_to_default_filename(tmp_path):
     plot_path.write_bytes(b"plot")
 
     response_content = "Please see weibull_plot.png"
-    image_url = infer_latest_image_url(response_content, static_dir)
-    assert image_url == "http://localhost:8000/static/weibull_plot.png"
+    image_url = infer_latest_image_url(response_content, static_dir, base_url="")
+    assert image_url == "/static/weibull_plot.png"

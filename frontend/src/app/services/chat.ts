@@ -2,9 +2,10 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
-// --- Interfaces for type safety ---
 export interface ChatRequest {
   prompt: string;
+  model?: string;
+  thinking?: boolean;
 }
 
 export interface ChatResponse {
@@ -12,16 +13,101 @@ export interface ChatResponse {
   image_url: string | null;
 }
 
+export type ChatStreamEvent =
+  | { type: 'token'; text: string }
+  | { type: 'thought'; text: string }
+  | { type: 'tool_start'; name: string }
+  | { type: 'tool_end'; name: string }
+  | { type: 'image'; url: string }
+  | { type: 'done'; content: string; image_url: string | null }
+  | { type: 'error'; message: string };
+
+export interface KnowledgeFileStatus {
+  source: string;
+  chunks: number | null;
+  indexed: boolean;
+}
+
+export interface KnowledgeStatus {
+  embedding_model: string;
+  files: KnowledgeFileStatus[];
+  chunk_count: number;
+}
+
+export interface LlmModelsResponse {
+  configured: boolean;
+  models: string[];
+  current: string | null;
+  base: string;
+  error?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class ChatService {
-  private apiUrl = 'http://localhost:8000/api/chat';
+  constructor(private http: HttpClient) {}
 
-  constructor(private http: HttpClient) { }
+  sendMessage(prompt: string, model?: string): Observable<ChatResponse> {
+    const request: ChatRequest = { prompt, model };
+    return this.http.post<ChatResponse>('/api/chat', request);
+  }
 
-  sendMessage(prompt: string): Observable<ChatResponse> {
-    const request: ChatRequest = { prompt };
-    return this.http.post<ChatResponse>(this.apiUrl, request);
+  listModels(): Observable<LlmModelsResponse> {
+    return this.http.get<LlmModelsResponse>('/api/models');
+  }
+
+  knowledgeStatus(): Observable<KnowledgeStatus> {
+    return this.http.get<KnowledgeStatus>('/api/knowledge/status');
+  }
+
+  uploadDocument(file: File): Observable<{ source: string; indexed: boolean; message: string }> {
+    const body = new FormData();
+    body.append('file', file);
+    return this.http.post<{ source: string; indexed: boolean; message: string }>('/api/knowledge/upload', body);
+  }
+
+  async streamMessage(
+    prompt: string,
+    onEvent: (event: ChatStreamEvent) => void,
+    signal?: AbortSignal,
+    model?: string,
+    thinking = true
+  ): Promise<void> {
+    const response = await fetch('/api/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify({ prompt, model, thinking } satisfies ChatRequest),
+      signal
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error(`Chat stream failed (${response.status})`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() ?? '';
+      for (const frame of frames) {
+        const dataLine = frame
+          .split('\n')
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).trim())
+          .join('');
+        if (!dataLine) {
+          continue;
+        }
+        onEvent(JSON.parse(dataLine) as ChatStreamEvent);
+      }
+    }
   }
 }

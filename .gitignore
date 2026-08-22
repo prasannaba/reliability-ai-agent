@@ -47,6 +47,7 @@ __screenshots__/
 /backend/**/*.pyc
 /backend/__pycache__/
 /backend/**/__pycache__/
+/backend/.venv/
 
 # Pytest cache
 .pytest_cache/
@@ -54,3 +55,15 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Local secrets and generated knowledge-base indexes
+.env
+.env.*
+!.env.example
+/.rag/
+/backend/.rag/
+
+# Generated plots and built UI (keep the ui folder itself)
+/backend/static/weibull_plot_*.png
+/backend/static/ui/**
+!/backend/static/ui/.gitkeep
