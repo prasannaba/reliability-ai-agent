@@ -132,9 +132,12 @@ Edit `.env`:
 
 | Variable | Role |
 | --- | --- |
-| `LLM_API_BASE` | OpenAI-compatible root, e.g. `http://127.0.0.1:8080/v1` |
+| `LLM_API_BASE` | Server root, e.g. `http://127.0.0.1:8080/v1`. Pasted `/v1/chat/completions` endpoints are trimmed; the `/v1` root is derived automatically |
+| `LLM_PROVIDER` | Optional: `ollama` \| `lmstudio` \| `llamacpp` \| `unsloth` \| `openai` \| `litert` \| `custom`. Selects the default URL in Chat Settings; any base URL still works |
 | `LLM_API_KEY` | Required by many local servers; `dummy` is fine if they ignore it |
 | `LLM_MODEL` | Optional; used only if it appears in `GET {base}/models` |
+| `LLM_TEMPERATURE` | Optional sampling temperature `0..2` (also editable in Chat Settings) |
+| `LLM_SYSTEM_PROMPT` | Optional extra instructions appended to the reliability system prompt |
 | `EMBEDDING_MODEL` | Local embedder for RAG |
 | `FRONTEND_ORIGIN` | CORS; include `http://localhost:4200` if you use `ng serve` |
 | `PUBLIC_BASE_URL` | Leave empty so plot URLs stay same-origin (`/static/...`) |
@@ -212,7 +215,9 @@ npm start
 
 Add a plugin: `backend/plugins/<name>.py` with `def register(mcp):`. Extra stdio servers: `backend/mcp_servers.json`. Standalone host: `uv run python mcp_server.py`.
 
-HTTP: `GET /health`, `GET /api/models`, knowledge status/upload, `POST /api/chat` and `POST /api/chat/stream` (`prompt`, `model`, `thinking`).
+HTTP: `GET /health`, `GET /api/models` (now with `provider` + Ollama `/api/tags` fallback), `GET/PUT /api/llm/config` (provider, baseUrl, model, temperature, systemPrompt), `POST /api/llm/test`, knowledge status/upload, `POST /api/chat` and `POST /api/chat/stream` (`prompt`, `model`, `thinking`).
+
+Chat UI (MDLithe-inspired, minus editor selection/pin/apply): provider badge + Chat Settings dialog (Ollama, LM Studio, llama.cpp, LiteRT-LM, Unsloth, OpenAI, custom) with test-connection and model refresh, model dropdown with manual id entry, multi-session history with search, per-message copy / edit-and-resend / regenerate, timestamps, model labels, response stats, stop-generating, and Markdown export with provider/model metadata.
 
 ---
 

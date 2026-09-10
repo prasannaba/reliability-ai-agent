@@ -8,9 +8,17 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ChatService } from '../../services/chat';
-import { Message } from '../../models/message.model';
+import {
+  ChatSession,
+  Message,
+  newMessageId,
+  sessionTitle,
+} from '../../models/message.model';
+import type { LlmConfig } from '../../models/llm-config.model';
 import { MarkdownModule } from 'ngx-markdown';
 import { patchMarkdownMath } from '../../utils/math-markdown';
+import { LlmSettingsComponent } from '../llm-settings/llm-settings';
+import { IconComponent } from '../icon/icon';
 
 interface ExportFormat {
   label: string;
@@ -19,20 +27,36 @@ interface ExportFormat {
 
 declare var MathJax: any;
 
+const SESSIONS_KEY = 'reliability-copilot-sessions';
+const CURRENT_KEY = 'reliability-copilot-current';
+const WELCOME =
+  'Reliability Copilot — ask a life-data or handbook question. Numbers come from tools, not guesses. Attach a procedure on the prompt if you want it in the knowledge base.';
+
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [FormsModule, MarkdownModule],
+  imports: [FormsModule, MarkdownModule, LlmSettingsComponent, IconComponent],
   templateUrl: './chat.html',
   styleUrls: ['./chat.css'],
+  host: {
+    '(document:click)': 'onDocumentClick($event)',
+    '(document:keydown.escape)': 'closeModelList()',
+  },
 })
 export class ChatComponent implements OnInit, AfterViewInit {
   @ViewChild('messageContainer') private messageContainer!: ElementRef;
   @ViewChild('promptBox') private promptBox?: ElementRef<HTMLTextAreaElement>;
+  @ViewChild('modelSelector') private modelSelector?: ElementRef;
+  @ViewChild('exportMenu') private exportMenu?: ElementRef;
+  @ViewChild(LlmSettingsComponent) private settingsDialog!: LlmSettingsComponent;
 
+  sessions: ChatSession[] = [];
+  currentId: string | null = null;
   messages: Message[] = [];
   userInput: string = '';
   isLoading = false;
+  streaming = false;
+  error: string | null = null;
   knowledgeSummary: string = '';
   exportFormats: ExportFormat[] = [
     { label: 'Markdown', value: 'markdown' },
@@ -42,9 +66,23 @@ export class ChatComponent implements OnInit, AfterViewInit {
   selectedExportFormat: ExportFormat['value'] = 'markdown';
   models: string[] = [];
   selectedModel = '';
+  provider = 'custom';
   modelsHint = '';
+  modelsLoading = false;
+  modelListOpen = false;
   thinkingEnabled = true;
+  showSettings = false;
+  sidebarOpen = true;
+  historyQuery = '';
+  exportMenuOpen = false;
+  editingId: string | null = null;
+  editingContent = '';
+  copiedId: string | null = null;
+
+  private llmConfig: LlmConfig | null = null;
   private thinkingStartedAt = 0;
+  private aborter: AbortController | null = null;
+  private chatCounter = 0;
 
   constructor(
     private chatService: ChatService,
@@ -52,14 +90,13 @@ export class ChatComponent implements OnInit, AfterViewInit {
   ) {}
 
   ngOnInit() {
-    this.messages.push({
-      role: 'assistant',
-      content:
-        'Reliability Copilot — ask a life-data or handbook question. Numbers come from tools, not guesses. Attach a procedure on the prompt if you want it in the knowledge base.',
-    });
+    if (typeof window !== 'undefined' && window.innerWidth < 860) {
+      this.sidebarOpen = false;
+    }
     this.loadThinkingPref();
+    this.loadSessions();
     this.refreshKnowledgeStatus();
-    this.refreshModels();
+    this.refreshLlmConfig(() => this.refreshModels());
     setTimeout(() => this.renderMath(), 100);
   }
 
@@ -67,9 +104,432 @@ export class ChatComponent implements OnInit, AfterViewInit {
     this.scrollToBottom();
   }
 
-  get canSend(): boolean {
-    return !!this.userInput.trim() && !this.isLoading && !!this.selectedModel;
+  // ---- sessions (MDLithe-style, localStorage) ----
+
+  get currentSession(): ChatSession | undefined {
+    return this.sessions.find((s) => s.id === this.currentId);
   }
+
+  get currentTitle(): string {
+    const s = this.currentSession;
+    return s ? sessionTitle(s) : 'New chat';
+  }
+
+  private loadSessions(): void {
+    try {
+      const raw = localStorage.getItem(SESSIONS_KEY);
+      const current = localStorage.getItem(CURRENT_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as ChatSession[];
+        if (Array.isArray(parsed) && parsed.length) {
+          this.sessions = parsed;
+          this.chatCounter = parsed.length;
+          this.currentId = current && parsed.some((s) => s.id === current) ? current : parsed[0].id;
+          this.messages = this.currentSession?.messages ?? [];
+          return;
+        }
+      }
+    } catch {
+      // fall through to fresh session
+    }
+    this.newChat(false);
+  }
+
+  private persistSessions(): void {
+    try {
+      localStorage.setItem(SESSIONS_KEY, JSON.stringify(this.sessions.slice(0, 50)));
+      if (this.currentId) {
+        localStorage.setItem(CURRENT_KEY, this.currentId);
+      }
+    } catch {
+      // storage full / unavailable — chat still works in memory
+    }
+  }
+
+  private syncMessages(): void {
+    const session = this.currentSession;
+    if (session) {
+      session.messages = this.messages;
+      session.updatedAt = Date.now();
+      this.persistSessions();
+    }
+  }
+
+  newChat(select = true): void {
+    this.chatCounter += 1;
+    const session: ChatSession = {
+      id: newMessageId(),
+      title: `Chat ${this.chatCounter}`,
+      messages: [
+        {
+          id: newMessageId(),
+          role: 'assistant',
+          content: WELCOME,
+          timestamp: Date.now(),
+        },
+      ],
+      updatedAt: Date.now(),
+    };
+    this.sessions = [session, ...this.sessions];
+    if (select) {
+      this.currentId = session.id;
+      this.messages = session.messages;
+    } else if (!this.currentId) {
+      this.currentId = session.id;
+      this.messages = session.messages;
+    }
+    this.error = null;
+    this.persistSessions();
+    this.cdr.detectChanges();
+    this.scrollToBottom();
+  }
+
+  selectSession(id: string): void {
+    const session = this.sessions.find((s) => s.id === id);
+    if (!session) {
+      return;
+    }
+    this.currentId = id;
+    this.messages = session.messages;
+    this.error = null;
+    this.persistSessions();
+    if (typeof window !== 'undefined' && window.innerWidth < 860) {
+      this.sidebarOpen = false;
+    }
+    this.cdr.detectChanges();
+    this.scrollToBottom();
+    setTimeout(() => this.renderMath(), 50);
+  }
+
+  deleteSession(id: string): void {
+    this.sessions = this.sessions.filter((s) => s.id !== id);
+    if (this.currentId === id) {
+      if (!this.sessions.length) {
+        this.newChat(false);
+        this.currentId = this.sessions[0].id;
+        this.messages = this.sessions[0].messages;
+      } else {
+        this.currentId = this.sessions[0].id;
+        this.messages = this.sessions[0].messages;
+      }
+    }
+    this.persistSessions();
+    this.cdr.detectChanges();
+  }
+
+  clearChat(): void {
+    this.messages = [
+      { id: newMessageId(), role: 'assistant', content: WELCOME, timestamp: Date.now() },
+    ];
+    this.error = null;
+    this.syncMessages();
+    this.cdr.detectChanges();
+    this.scrollToBottom();
+  }
+
+  // ---- sidebar: history + settings (ChatGPT-style) ----
+
+  toggleSidebar(): void {
+    this.sidebarOpen = !this.sidebarOpen;
+  }
+
+  filteredSessions(): ChatSession[] {
+    const q = this.historyQuery.trim().toLowerCase();
+    const all = [...this.sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+    if (!q) {
+      return all;
+    }
+    const parts = q.split(/\s+/);
+    return all.filter((s) => {
+      const haystack =
+        `${sessionTitle(s)} ${s.messages.map((m) => m.content).join(' ')}`.toLowerCase();
+      return parts.every((part) => haystack.includes(part));
+    });
+  }
+
+  displayTitle(session: ChatSession): string {
+    return sessionTitle(session);
+  }
+
+  relativeTime(timestamp: number): string {
+    const diff = Date.now() - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) {
+      return 'just now';
+    }
+    if (minutes < 60) {
+      return `${minutes}m ago`;
+    }
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) {
+      return `${hours}h ago`;
+    }
+    const days = Math.floor(hours / 24);
+    if (days < 7) {
+      return `${days}d ago`;
+    }
+    return new Date(timestamp).toLocaleDateString();
+  }
+
+  confirmDeleteSession(session: ChatSession, event: Event): void {
+    event.stopPropagation();
+    if (window.confirm(`Delete "${sessionTitle(session)}"?`)) {
+      this.deleteSession(session.id);
+    }
+  }
+
+  // ---- settings ----
+
+  openSettings(): void {
+    this.showSettings = true;
+    this.cdr.detectChanges();
+    const fallback: LlmConfig = {
+      provider: (this.provider as LlmConfig['provider']) || 'custom',
+      baseUrl: '',
+      hasApiKey: false,
+      model: this.selectedModel || null,
+      temperature: 0.7,
+      systemPrompt: '',
+      configured: false,
+    };
+    setTimeout(() =>
+      this.settingsDialog.open(this.llmConfig || fallback, (saved) => {
+        this.showSettings = false;
+        if (saved) {
+          this.refreshLlmConfig(() => this.refreshModels());
+        }
+        this.cdr.detectChanges();
+      }),
+    );
+  }
+
+  private refreshLlmConfig(done?: () => void): void {
+    this.chatService.getLlmConfig().subscribe({
+      next: (config) => {
+        this.llmConfig = config;
+        this.provider = config.provider || 'custom';
+        if (config.model && !this.selectedModel) {
+          this.selectedModel = config.model;
+        }
+        done?.();
+        this.cdr.detectChanges();
+      },
+      error: () => done?.(),
+    });
+  }
+
+  // ---- models (MDLithe-style dropdown with refresh + manual entry) ----
+
+  toggleModelList(): void {
+    this.modelListOpen = !this.modelListOpen;
+    if (this.modelListOpen) {
+      this.exportMenuOpen = false;
+    }
+  }
+
+  onDocumentClick(event: MouseEvent): void {
+    const target = event.target as Node;
+    if (this.modelListOpen) {
+      const el = this.modelSelector?.nativeElement as HTMLElement | undefined;
+      if (el && !el.contains(target)) {
+        this.modelListOpen = false;
+      }
+    }
+    if (this.exportMenuOpen) {
+      const el = this.exportMenu?.nativeElement as HTMLElement | undefined;
+      if (el && !el.contains(target)) {
+        this.exportMenuOpen = false;
+      }
+    }
+    if (this.modelListOpen || this.exportMenuOpen) {
+      this.cdr.detectChanges();
+    }
+  }
+
+  closeModelList(): void {
+    this.modelListOpen = false;
+    this.exportMenuOpen = false;
+  }
+
+  toggleExportMenu(): void {
+    this.exportMenuOpen = !this.exportMenuOpen;
+    if (this.exportMenuOpen) {
+      this.modelListOpen = false;
+    }
+  }
+
+  chooseModel(model: string): void {
+    this.selectedModel = model;
+    this.modelListOpen = false;
+    this.persistModelChoice();
+  }
+
+  onModelManualChange(): void {
+    this.persistModelChoice();
+  }
+
+  private persistModelChoice(): void {
+    if (!this.selectedModel) {
+      return;
+    }
+    this.chatService.saveLlmConfig({ model: this.selectedModel }).subscribe({
+      next: (config) => {
+        this.llmConfig = config;
+      },
+      error: () => undefined,
+    });
+  }
+
+  refreshModels(): void {
+    this.modelsLoading = true;
+    this.chatService.listModels().subscribe({
+      next: (result) => {
+        this.modelsLoading = false;
+        this.models = result.models || [];
+        this.provider = result.provider || this.provider;
+        if (result.current && !this.selectedModel) {
+          this.selectedModel = result.current;
+        } else if (this.llmConfig?.model && !this.selectedModel) {
+          this.selectedModel = this.llmConfig.model;
+        } else if (this.selectedModel && this.models.length && !this.models.includes(this.selectedModel)) {
+          // Keep manual entries (single-model servers like "default");
+          // only fall back when the list is non-empty and ours is absent
+          // and no explicit preference exists.
+        } else if (!this.selectedModel) {
+          this.selectedModel = this.models[0] || '';
+        }
+        this.modelsHint = result.error || '';
+        this.cdr.detectChanges();
+      },
+      error: () => {
+        this.modelsLoading = false;
+        this.models = [];
+        this.selectedModel = '';
+        this.modelsHint =
+          'Could not load models. Open Settings to pick a provider (Ollama, LM Studio, llama.cpp, …) and test the connection.';
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  formatModelName(model: string): string {
+    return model.length > 28 ? `${model.substring(0, 28)}…` : model;
+  }
+
+  shortModelName(id: string): string {
+    const slash = id.replace(/\\/g, '/').split('/').pop() || id;
+    return slash.length > 48 ? `${slash.slice(0, 45)}…` : slash;
+  }
+
+  providerLabel(): string {
+    return this.provider || 'custom';
+  }
+
+  // ---- message actions (MDLithe-style) ----
+
+  get canSend(): boolean {
+    return !!this.userInput.trim() && !this.isLoading;
+  }
+
+  copyMessage(msg: Message): void {
+    const text = msg.content || '';
+    if (!text) {
+      return;
+    }
+    const done = () => {
+      this.copiedId = msg.id;
+      this.cdr.detectChanges();
+      setTimeout(() => {
+        this.copiedId = null;
+        this.cdr.detectChanges();
+      }, 1500);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(() => done());
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+      } catch {
+        // clipboard unavailable
+      }
+      document.body.removeChild(ta);
+      done();
+    }
+  }
+
+  startEdit(msg: Message): void {
+    this.editingId = msg.id;
+    this.editingContent = msg.content;
+  }
+
+  cancelEdit(): void {
+    this.editingId = null;
+    this.editingContent = '';
+  }
+
+  saveEdit(): void {
+    if (!this.editingId) {
+      return;
+    }
+    const index = this.messages.findIndex((m) => m.id === this.editingId);
+    if (index < 0) {
+      this.cancelEdit();
+      return;
+    }
+    const edited = this.messages[index];
+    edited.content = this.editingContent;
+    // Editing a user message drops later replies and re-runs the assistant.
+    if (edited.role === 'user') {
+      this.messages = this.messages.slice(0, index + 1);
+      this.syncMessages();
+      this.cancelEdit();
+      void this.runCompletion(this.messages[index].content, true);
+    } else {
+      this.syncMessages();
+      this.cancelEdit();
+      this.cdr.detectChanges();
+    }
+  }
+
+  regenerate(): void {
+    if (this.isLoading || !this.messages.length) {
+      return;
+    }
+    let lastUserIdx = -1;
+    this.messages.forEach((m, i) => {
+      if (m.role === 'user') {
+        lastUserIdx = i;
+      }
+    });
+    if (lastUserIdx < 0) {
+      return;
+    }
+    const prompt = this.messages[lastUserIdx].content;
+    this.messages = this.messages.slice(0, lastUserIdx + 1);
+    this.syncMessages();
+    void this.runCompletion(prompt, true);
+  }
+
+  stopGenerating(): void {
+    this.aborter?.abort();
+  }
+
+  formatStats(seconds: number, chars: number): string {
+    return `${seconds.toFixed(1)}s · ~${Math.max(1, Math.round(chars / 4))} tokens`;
+  }
+
+  messageTime(timestamp: number): string {
+    if (!timestamp) {
+      return '';
+    }
+    return new Date(timestamp).toLocaleTimeString();
+  }
+
+  // ---- send / stream ----
 
   displayContent(content: string): string {
     return patchMarkdownMath(content || '');
@@ -93,11 +553,6 @@ export class ChatComponent implements OnInit, AfterViewInit {
 
   toggleThinking(msg: Message): void {
     msg.thinkingOpen = !msg.thinkingOpen;
-  }
-
-  shortModelName(id: string): string {
-    const slash = id.replace(/\\/g, '/').split('/').pop() || id;
-    return slash.length > 48 ? `${slash.slice(0, 45)}…` : slash;
   }
 
   persistThinkingPref(): void {
@@ -156,17 +611,36 @@ export class ChatComponent implements OnInit, AfterViewInit {
     if (!this.userInput.trim() || this.isLoading) {
       return;
     }
-
-    const userMessage: Message = { role: 'user', content: this.userInput };
-    this.messages.push(userMessage);
-    this.isLoading = true;
-    this.thinkingStartedAt = Date.now();
-    const currentInput = this.userInput;
+    const prompt = this.userInput;
     this.userInput = '';
     this.resizePrompt();
+    const userMessage: Message = {
+      id: newMessageId(),
+      role: 'user',
+      content: prompt,
+      timestamp: Date.now(),
+    };
+    this.messages.push(userMessage);
+    this.syncMessages();
+    await this.runCompletion(prompt, false);
+  }
+
+  private async runCompletion(prompt: string, isRerun: boolean) {
+    void isRerun;
+    void prompt;
+    const activePrompt = this.messages.filter((m) => m.role === 'user').pop()?.content ?? prompt;
+    this.isLoading = true;
+    this.streaming = true;
+    this.error = null;
+    this.thinkingStartedAt = Date.now();
+    this.aborter = new AbortController();
+    const signal = this.aborter.signal;
     const assistantMessage: Message = {
+      id: newMessageId(),
       role: 'assistant',
       content: '',
+      timestamp: Date.now(),
+      model: this.selectedModel || undefined,
       thinkingOpen: this.thinkingEnabled,
     };
     this.messages.push(assistantMessage);
@@ -175,7 +649,7 @@ export class ChatComponent implements OnInit, AfterViewInit {
 
     try {
       await this.chatService.streamMessage(
-        currentInput,
+        activePrompt,
         (event) => {
           if (event.type === 'token') {
             const first = !assistantMessage.content;
@@ -199,22 +673,41 @@ export class ChatComponent implements OnInit, AfterViewInit {
               assistantMessage.imageUrl = event.image_url;
             }
           } else if (event.type === 'error') {
-            assistantMessage.content = event.message;
+            this.error = event.message;
+            if (!assistantMessage.content) {
+              assistantMessage.content = event.message;
+            }
           }
           this.scheduleRender();
         },
-        undefined,
+        signal,
         this.selectedModel || undefined,
         this.thinkingEnabled,
       );
     } catch (err) {
-      assistantMessage.content =
-        'Sorry, something went wrong. Please check the backend connection.';
-      console.error(err);
+      if (signal.aborted) {
+        assistantMessage.stats = this.formatStats(
+          (Date.now() - this.thinkingStartedAt) / 1000,
+          assistantMessage.content.length,
+        );
+      } else {
+        this.error = 'Sorry, something went wrong. Please check the backend connection.';
+        assistantMessage.content =
+          assistantMessage.content || 'Sorry, something went wrong. Please check the backend connection.';
+        console.error(err);
+      }
     } finally {
       this.isLoading = false;
+      this.streaming = false;
+      this.aborter = null;
+      const elapsed = (Date.now() - this.thinkingStartedAt) / 1000;
       assistantMessage.thinkingMs = Date.now() - this.thinkingStartedAt;
       assistantMessage.thinkingOpen = false;
+      if (!assistantMessage.stats) {
+        assistantMessage.stats = this.formatStats(elapsed, assistantMessage.content.length);
+      }
+      assistantMessage.timestamp = assistantMessage.timestamp || Date.now();
+      this.syncMessages();
       this.cdr.detectChanges();
       this.scrollToBottom();
       setTimeout(() => this.renderMath(), 100);
@@ -247,6 +740,12 @@ export class ChatComponent implements OnInit, AfterViewInit {
         input.value = '';
       },
     });
+  }
+
+  exportAs(format: ExportFormat['value']): void {
+    this.selectedExportFormat = format;
+    this.exportMenuOpen = false;
+    this.exportChat();
   }
 
   exportChat(): void {
@@ -285,22 +784,6 @@ export class ChatComponent implements OnInit, AfterViewInit {
     });
   }
 
-  private refreshModels(): void {
-    this.chatService.listModels().subscribe({
-      next: (result) => {
-        this.models = result.models || [];
-        this.selectedModel = result.current || this.models[0] || '';
-        this.modelsHint = result.error || '';
-      },
-      error: () => {
-        this.models = [];
-        this.selectedModel = '';
-        this.modelsHint =
-          'Could not load models. Set LLM_API_BASE in the repo-root .env (see .env.example).';
-      },
-    });
-  }
-
   private refreshKnowledgeStatus(): void {
     this.chatService.knowledgeStatus().subscribe({
       next: (status) => {
@@ -326,21 +809,39 @@ export class ChatComponent implements OnInit, AfterViewInit {
   }
 
   private buildExportMarkdown(): string {
+    const session = this.currentSession;
+    const title = session ? sessionTitle(session) : 'Chat Export';
+    const header = [
+      `# ${title}`,
+      '',
+      `- Exported: ${new Date().toLocaleString()}`,
+      `- Provider: ${this.providerLabel()}`,
+      `- Model: ${this.selectedModel || 'unknown'}`,
+      `- Messages: ${this.messages.length}`,
+      '',
+      '---',
+      '',
+    ].join('\n');
     const sections = this.messages
       .filter((message) => message.role === 'user' || message.role === 'assistant')
       .map((message) => {
-        const label = message.role === 'assistant' ? 'Assistant' : 'User';
+        const time = message.timestamp ? new Date(message.timestamp).toLocaleString() : '';
+        const label =
+          message.role === 'assistant'
+            ? `Assistant (${message.model || this.selectedModel || 'assistant'}) · ${time}`
+            : `You · ${time}`;
         const lines = [
           `## ${label}`,
-          message.content || '',
-          message.imageUrl ? `![plot](${message.imageUrl})` : '',
           '',
-        ].filter(Boolean);
-        return lines.join('\n');
+          message.content || '',
+          message.stats ? `\n*${message.stats}*` : '',
+          message.imageUrl ? `\n![plot](${message.imageUrl})` : '',
+          '',
+        ].join('\n');
+        return lines;
       })
       .join('\n');
-
-    return ['# Chat Export', '', sections.trim()].filter(Boolean).join('\n');
+    return `${header}\n${sections.trim()}`.trim();
   }
 
   private buildExportHtml(): string {

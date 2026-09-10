@@ -1,0 +1,69 @@
+<div class="history-backdrop" (click)="onClose()()">
+  <div
+    class="history-dialog"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Chat history"
+    (click)="$event.stopPropagation()"
+    (keydown)="onKeydown($event)"
+  >
+    <div class="history-search">
+      <span aria-hidden="true">🕘</span>
+      <input
+        type="text"
+        [(ngModel)]="query"
+        name="historyQuery"
+        placeholder="Search chats…"
+        aria-label="Search chats"
+      />
+    </div>
+    <ul class="history-list">
+      <li>
+        <button
+          type="button"
+          class="history-item history-new"
+          [class.selected]="selectedIndex() === 0"
+          (mouseenter)="selectedIndex.set(0)"
+          (click)="choose(0)"
+        >
+          <span aria-hidden="true">+</span> New Chat
+        </button>
+      </li>
+      @if (!filtered().length) {
+        <li class="history-empty">{{ query() ? 'No matching chats found' : 'No chat history yet' }}</li>
+      } @else {
+        @for (session of filtered(); track session.id; let i = $index) {
+          <li class="history-row" [class.selected]="selectedIndex() === i + 1">
+            <button
+              type="button"
+              class="history-main"
+              (mouseenter)="selectedIndex.set(i + 1)"
+              (click)="choose(i + 1)"
+            >
+              <span class="history-top">
+                <span class="history-title">{{ displayTitle(session) }}</span>
+                @if (currentId() === session.id) {
+                  <span class="history-badge">active</span>
+                }
+                <span class="history-time">{{ relativeTime(session.updatedAt) }}</span>
+              </span>
+              @if (preview(session)) {
+                <span class="history-preview">{{ preview(session) }}</span>
+              }
+              <span class="history-meta">{{ session.messages.length }} messages</span>
+            </button>
+            <button
+              type="button"
+              class="history-delete"
+              [attr.aria-label]="'Delete ' + displayTitle(session)"
+              title="Delete chat"
+              (click)="remove(session, $event)"
+            >
+              🗑
+            </button>
+          </li>
+        }
+      }
+    </ul>
+  </div>
+</div>

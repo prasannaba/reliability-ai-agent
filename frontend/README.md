@@ -1,6 +1,8 @@
 # Reliability Copilot — frontend
 
-Angular 21 chat UI for the local Reliability Copilot. Single page: thread, composer (Enter to send, Shift+Enter for a new line), attachments, model picker, foldable thinking, Weibull plots, and markdown with MathJax (`\sb{...}` for subscripts so markdown does not eat `_`).
+Angular 21 chat UI for the local Reliability Copilot. Single page: thread, composer (Enter to send, Shift+Enter for a new line), attachments, provider badge + Chat Settings (Ollama, LM Studio, llama.cpp, LiteRT-LM, Unsloth, OpenAI, custom) with test-connection, model dropdown with refresh + manual id entry, multi-session history with search, per-message copy / edit-and-resend / regenerate, timestamps + model labels + response stats, stop-generating, foldable thinking, Weibull plots, export (Markdown/HTML/PDF), and markdown with MathJax (`\sb{...}` for subscripts so markdown does not eat `_`).
+
+Editor selection/pin/apply features from MDLithe were intentionally not ported — this app has no editor pane.
 
 The UI talks to the FastAPI backend. It does not compute Weibull or search the knowledge base itself.
 
@@ -43,6 +45,7 @@ Do not format `dist/`, `node_modules/`, or `.angular/`.
 
 ## Notes
 
-- Chat uses `POST /api/chat/stream` (`prompt`, `model`, `thinking`). Models come from `GET /api/models`.
+- Chat uses `POST /api/chat/stream` (`prompt`, `model`, `thinking`). Models come from `GET /api/models` (provider-aware, Ollama `/api/tags` fallback). Provider config lives in `GET/PUT /api/llm/config`, connection probe in `POST /api/llm/test`.
+- UI icons are Material Symbols Outlined via Google Fonts (`<app-icon name="…" />`, see `src/app/components/icon/icon.ts`), loaded from CDN like MathJax — offline builds still compile, but glyphs need network at runtime.
 - MathJax is loaded in `src/index.html` (not KaTeX). The app has no Angular router.
 - `npm run watch` rebuilds in development configuration without the proxy.

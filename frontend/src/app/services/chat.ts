@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import type { LlmConfig, LlmConfigUpdate, LlmTestResult } from '../models/llm-config.model';
 
 export interface ChatRequest {
   prompt: string;
@@ -34,6 +35,8 @@ export interface LlmModelsResponse {
   models: string[];
   current: string | null;
   base: string;
+  provider?: string;
+  providers?: Record<string, string>;
   error?: string;
 }
 
@@ -45,6 +48,18 @@ export class ChatService {
 
   listModels(): Observable<LlmModelsResponse> {
     return this.http.get<LlmModelsResponse>('/api/models');
+  }
+
+  getLlmConfig(): Observable<LlmConfig> {
+    return this.http.get<LlmConfig>('/api/llm/config');
+  }
+
+  saveLlmConfig(update: LlmConfigUpdate): Observable<LlmConfig> {
+    return this.http.put<LlmConfig>('/api/llm/config', update);
+  }
+
+  testLlmConfig(update: LlmConfigUpdate): Observable<LlmTestResult> {
+    return this.http.post<LlmTestResult>('/api/llm/test', update);
   }
 
   knowledgeStatus(): Observable<KnowledgeStatus> {

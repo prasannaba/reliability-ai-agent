@@ -1,0 +1,193 @@
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 16px;
+}
+
+.settings-dialog {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.25);
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.settings-header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.icon-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #666;
+  border-radius: 6px;
+  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn app-icon {
+  font-size: 20px;
+}
+
+.icon-btn:hover {
+  background: #f0f0f0;
+  color: #111;
+}
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.field select,
+.field input[type='text'],
+.field input[type='password'],
+.field textarea {
+  border: 1px solid #d4d4d4;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.9rem;
+  background: #fff;
+}
+
+.field select:focus,
+.field input:focus,
+.field textarea:focus {
+  outline: 2px solid #10a37f;
+  outline-offset: 0;
+  border-color: #10a37f;
+}
+
+.label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.link-btn {
+  border: none;
+  background: transparent;
+  color: #666;
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.link-btn:hover:not(:disabled) {
+  color: #10a37f;
+  background: #f0f0f0;
+}
+
+.help {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #8a8a8a;
+}
+
+.status-success {
+  color: #0d7a5f;
+}
+
+.status-error {
+  color: #c0392b;
+}
+
+.test-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.test-btn {
+  border: 1px solid #d4d4d4;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.test-btn app-icon {
+  font-size: 17px;
+}
+
+.test-btn.success {
+  border-color: #0d7a5f;
+  color: #0d7a5f;
+}
+
+.test-btn.error {
+  border-color: #c0392b;
+  color: #c0392b;
+}
+
+.error-text {
+  color: #c0392b;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.optional {
+  font-weight: 400;
+  color: #8a8a8a;
+}
+
+.settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid #e5e5e5;
+}
+
+.btn {
+  border: 1px solid #d4d4d4;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: #0d0d0d;
+  border-color: #0d0d0d;
+  color: #fff;
+}

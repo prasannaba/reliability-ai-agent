@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 import os
 import re
@@ -120,6 +121,24 @@ class ChatRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=20_000)
     model: str | None = Field(default=None, max_length=512)
     thinking: bool = True
+
+
+class LlmConfigUpdate(BaseModel):
+    """Runtime LLM endpoint override.
+
+    NOTE: must stay at module level. FastAPI resolves endpoint annotations
+    from module globals (this file uses `from __future__ import annotations`,
+    so annotations are strings); a class nested inside create_app() is
+    invisible there and the parameter silently degrades to a query param,
+    which made provider switching a no-op (422 on PUT, stale tests on POST).
+    """
+
+    provider: str | None = None
+    baseUrl: str | None = None
+    apiKey: str | None = None
+    model: str | None = None
+    temperature: float | None = None
+    systemPrompt: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -259,13 +278,125 @@ LLM_UNCONFIGURED = (
     "(copy from .env.example), for example LLM_API_BASE=http://127.0.0.1:8080/v1"
 )
 
+# Provider presets mirrored from the MDLithe chat settings so the frontend can
+# offer Ollama / LM Studio / llama.cpp / Unsloth / LiteRT-LM / OpenAI / custom
+# endpoints without the user hand-editing .env for every switch.
+PROVIDER_DEFAULTS: dict[str, str] = {
+    "ollama": "http://localhost:11434",
+    "lmstudio": "http://localhost:1234",
+    "llamacpp": "http://localhost:8080",
+    "unsloth": "http://127.0.0.1:8888",
+    "openai": "https://api.openai.com/v1",
+    "litert": "http://localhost:9379",
+    "custom": "",
+}
+
+_KNOWN_ENDPOINT_SUFFIXES = (
+    "/v1/chat/completions",
+    "/v1/completions",
+    "/v1/models",
+    "/chat/completions",
+    "/api/chat",
+    "/api/tags",
+    "/completion",
+)
+
+# Runtime overrides set via PUT /api/llm/config (in-memory; env remains default).
+_LLM_CONFIG_OVERRIDE: dict[str, Any] = {}
+
+
+def normalize_base_url(raw: str | None) -> str:
+    """Reduce a pasted endpoint URL to its root (no doubled /v1/... segments)."""
+    base = (raw or "").strip().rstrip("/")
+    lowered = base.lower()
+    for suffix in _KNOWN_ENDPOINT_SUFFIXES:
+        if lowered.endswith(suffix) and len(base) > len(suffix):
+            base = base[: -len(suffix)].rstrip("/")
+            break
+    return base
+
+
+def openai_api_base(base: str) -> str:
+    """Return the OpenAI-compatible root, guaranteeing exactly one /v1."""
+    base = (base or "").strip().rstrip("/")
+    if re.search(r"/v1$", base, re.IGNORECASE):
+        return base
+    return f"{base}/v1"
+
+
+def resolve_llm_provider() -> str:
+    override = str(_LLM_CONFIG_OVERRIDE.get("provider") or "").strip().lower()
+    if override in PROVIDER_DEFAULTS:
+        return override
+    env_provider = (os.getenv("LLM_PROVIDER") or "").strip().lower()
+    if env_provider in PROVIDER_DEFAULTS:
+        return env_provider
+    # Infer Ollama when the base URL is its default port without /v1.
+    base = (os.getenv("LLM_API_BASE") or "")
+    if ":11434" in base:
+        return "ollama"
+    return "custom"
+
 
 def llm_api_base() -> str | None:
-    value = (os.getenv("LLM_API_BASE") or "").strip().rstrip("/")
+    override = normalize_base_url(str(_LLM_CONFIG_OVERRIDE.get("baseUrl") or ""))
+    if override:
+        return override
+    value = normalize_base_url(os.getenv("LLM_API_BASE"))
     return value or None
 
 
+def llm_openai_base() -> str | None:
+    base = llm_api_base()
+    return openai_api_base(base) if base else None
+
+
+def llm_api_key() -> str:
+    override = _LLM_CONFIG_OVERRIDE.get("apiKey")
+    if isinstance(override, str) and override:
+        return override
+    return os.getenv("LLM_API_KEY", "dummy") or "dummy"
+
+
+def llm_temperature() -> float:
+    override = _LLM_CONFIG_OVERRIDE.get("temperature")
+    if isinstance(override, (int, float)):
+        return float(override)
+    try:
+        return float(os.getenv("LLM_TEMPERATURE", "0.1"))
+    except ValueError:
+        return 0.1
+
+
+def llm_system_prompt_extra() -> str:
+    override = _LLM_CONFIG_OVERRIDE.get("systemPrompt")
+    if isinstance(override, str) and override.strip():
+        return override.strip()
+    return (os.getenv("LLM_SYSTEM_PROMPT") or "").strip()
+
+
+def llm_config_snapshot() -> dict[str, Any]:
+    base = llm_api_base() or ""
+    provider = resolve_llm_provider()
+    if not base:
+        base = PROVIDER_DEFAULTS.get(provider, "")
+    model = _LLM_CONFIG_OVERRIDE.get("model") or preferred_llm_model()
+    return {
+        "provider": provider,
+        "baseUrl": base,
+        "openaiBase": openai_api_base(base) if base else "",
+        "hasApiKey": bool(llm_api_key() and llm_api_key() != "dummy"),
+        "model": model,
+        "temperature": llm_temperature(),
+        "systemPrompt": llm_system_prompt_extra(),
+        "configured": bool(base),
+    }
+
+
 def preferred_llm_model() -> str | None:
+    override = str(_LLM_CONFIG_OVERRIDE.get("model") or "").strip()
+    if override:
+        return override
     value = (os.getenv("LLM_MODEL") or "").strip()
     return value or None
 
@@ -278,36 +409,143 @@ def pick_listed_model(models: list[str], preferred: str | None = None) -> str | 
 
 def parse_openai_model_ids(payload: object) -> list[str]:
     if not isinstance(payload, dict):
+        if isinstance(payload, list):
+            return [
+                str(item).strip()
+                if isinstance(item, str)
+                else str(item.get("id") or item.get("name") or "").strip()
+                for item in payload
+                if (isinstance(item, str) and item.strip())
+                or (isinstance(item, dict) and (item.get("id") or item.get("name")))
+            ]
         return []
     ids: list[str] = []
     data = payload.get("data")
     if isinstance(data, list):
         for item in data:
-            if isinstance(item, dict) and item.get("id"):
-                ids.append(str(item["id"]))
+            if isinstance(item, dict) and (item.get("id") or item.get("name")):
+                ids.append(str(item.get("id") or item.get("name")))
             elif isinstance(item, str) and item.strip():
                 ids.append(item.strip())
     if ids:
         return ids
+    # Ollama native shape: {"models": [{"name": "llama3.1:8b", ...}]}
     extra = payload.get("models")
     if isinstance(extra, list):
-        return [str(item) for item in extra if isinstance(item, str) and item.strip()]
+        out: list[str] = []
+        for item in extra:
+            if isinstance(item, dict) and (item.get("name") or item.get("id")):
+                out.append(str(item.get("name") or item.get("id")))
+            elif isinstance(item, str) and item.strip():
+                out.append(item.strip())
+        if out:
+            return out
     return []
 
 
+def _http_get_json(url: str, timeout_seconds: float) -> Any:
+    request = urllib.request.Request(
+        url,
+        headers={"Authorization": f"Bearer {llm_api_key()}"},
+    )
+    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _probe_all(
+    urls: list[str],
+    timeout_seconds: float,
+    stop_when: Any = None,
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """GET every candidate URL concurrently; return {url: payload} successes and {url: error}.
+
+    Probes used to run sequentially, so one hanging candidate (slow Ollama
+    cloud handshake, half-open server) stalled the settings dialog for
+    6-20s+. Racing keeps total latency near the fastest responder, bounded
+    by a single timeout for dead hosts. `stop_when(url, ok, payload)` ends
+    the race early once a decisive (usually top-priority) answer arrives,
+    without waiting for slow stragglers.
+    """
+    successes: dict[str, Any] = {}
+    errors: dict[str, str] = {}
+
+    def _get(url: str) -> tuple[str, bool, Any]:
+        try:
+            return (url, True, _http_get_json(url, timeout_seconds))
+        except Exception as exc:  # noqa: BLE001 - collected below
+            return (url, False, str(exc)[:200])
+
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(urls)))
+    try:
+        futures = [pool.submit(_get, url) for url in urls]
+        try:
+            for future in concurrent.futures.as_completed(futures, timeout=timeout_seconds):
+                url, ok, payload = future.result()
+                if ok:
+                    successes[url] = payload
+                else:
+                    errors[url] = payload
+                if stop_when is not None and stop_when(url, ok, payload):
+                    break
+        except TimeoutError:
+            pass
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+    return successes, errors
+
+
 def fetch_llm_models(timeout_seconds: float = 3.0) -> list[str]:
-    """List models from the OpenAI-compatible server in LLM_API_BASE."""
+    """List models, racing OpenAI-compatible, Ollama-native, and /props endpoints."""
     base = llm_api_base()
     if not base:
         raise RuntimeError(LLM_UNCONFIGURED)
-    url = f"{base}/models"
-    request = urllib.request.Request(
-        url,
-        headers={"Authorization": f"Bearer {os.getenv('LLM_API_KEY', 'dummy')}"},
+    api_base = openai_api_base(base)
+    models_url = f"{api_base}/models"
+    tags_url = f"{base}/api/tags"
+    props_url = f"{base}/props"
+    successes, errors = _probe_all([models_url, tags_url, props_url], timeout_seconds)
+
+    # Priority 1: standard OpenAI-compatible listing (LM Studio, llamacpp,
+    # vLLM, Ollama /v1/models, OpenAI, LiteRT-LM, Unsloth).
+    if models_url in successes:
+        ids = parse_openai_model_ids(successes[models_url])
+        if ids:
+            return ids
+    # Priority 2: Ollama native listing.
+    if tags_url in successes:
+        ids = parse_openai_model_ids(successes[tags_url])
+        if ids:
+            return ids
+    # Priority 3: llama.cpp single-model servers expose /props with model_path.
+    if props_url in successes and isinstance(successes[props_url], dict):
+        props = successes[props_url]
+        candidate = (
+            (props.get("default_generation_settings") or {}).get("model")
+            or (str(props.get("model_path") or "").split("/")[-1].split("\\")[-1])
+            or props.get("model")
+        )
+        if isinstance(candidate, str) and candidate.strip():
+            return [candidate.strip()]
+    first_error = errors.get(models_url) or errors.get(tags_url) or errors.get(props_url) or "unknown error"
+    raise RuntimeError(
+        f"No models at {base} ({models_url}, {tags_url}). "
+        f"Is the LLM server running? {first_error}"
     )
-    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
-        payload = json.loads(response.read().decode("utf-8"))
-    return parse_openai_model_ids(payload)
+
+
+def test_llm_connection(timeout_seconds: float = 3.0) -> tuple[bool, str]:
+    """Probe listing/health endpoints concurrently; mirrors MDLithe testConnection logic."""
+    base = llm_api_base()
+    if not base:
+        return False, LLM_UNCONFIGURED
+    api_base = openai_api_base(base)
+    candidates = [f"{api_base}/models", f"{base}/api/tags", f"{base}/health", f"{base}/props", base]
+    successes, errors = _probe_all(candidates, timeout_seconds)
+    for url in candidates:
+        if url in successes:
+            return True, f"Connected to {url}"
+    last_error = errors.get(candidates[0], "")
+    return False, f"Could not reach {base}. Is the server running? {last_error}"
 
 
 async def fetch_llm_models_cached() -> list[str]:
@@ -426,23 +664,26 @@ async def stream_agent_events(
 
 
 def _openai_like(model: str) -> OpenAILike:
-    base = llm_api_base()
-    if not base:
+    api_base = llm_openai_base()
+    if not api_base:
         raise RuntimeError(LLM_UNCONFIGURED)
     return OpenAILike(
         model=model,
-        api_base=base,
-        api_key=os.getenv("LLM_API_KEY", "dummy"),
+        api_base=api_base,
+        api_key=llm_api_key(),
         is_chat_model=True,
         is_function_calling_model=True,
+        temperature=llm_temperature(),
     )
 
 
 async def build_agent(mcp_client: ReliabilityMCPClient, model: str) -> ReActAgent:
     Settings.llm = _openai_like(model)
+    extra = llm_system_prompt_extra()
+    prompt = SYSTEM_PROMPT if not extra else f"{SYSTEM_PROMPT}\n\nAdditional operator instructions: {extra}"
     return ReActAgent(
         tools=await mcp_client.llama_tools(),
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=prompt,
     )
 
 
@@ -497,11 +738,21 @@ def create_app() -> FastAPI:
                 status_code=503,
                 detail=f"No models at {llm_api_base()}. Start the LLM server or check LLM_API_BASE in .env.",
             )
-        if getattr(app.state, "llm_model", None) == chosen and getattr(app.state, "agent", None):
+        fingerprint = (
+            chosen,
+            llm_api_base(),
+            llm_temperature(),
+            llm_system_prompt_extra(),
+            llm_api_key(),
+        )
+        if getattr(app.state, "llm_fingerprint", None) == fingerprint and getattr(
+            app.state, "agent", None
+        ):
             return
         app.state.agent = await build_agent(mcp_client, chosen)
         app.state.agent_context = Context(app.state.agent)
         app.state.llm_model = chosen
+        app.state.llm_fingerprint = fingerprint
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -510,12 +761,15 @@ def create_app() -> FastAPI:
     @app.get("/api/models")
     async def list_models() -> dict[str, Any]:
         base = llm_api_base()
+        snapshot = llm_config_snapshot()
         if not base:
             return {
                 "configured": False,
                 "models": [],
                 "current": None,
                 "base": "",
+                "provider": snapshot["provider"],
+                "providers": PROVIDER_DEFAULTS,
                 "error": LLM_UNCONFIGURED,
             }
         try:
@@ -532,10 +786,79 @@ def create_app() -> FastAPI:
                 "models": [],
                 "current": None,
                 "base": base,
+                "provider": snapshot["provider"],
+                "providers": PROVIDER_DEFAULTS,
                 "error": f"No models at {base}. Is the LLM server running? {exc}",
             }
         current = pick_listed_model(models, preferred_llm_model())
-        return {"configured": True, "models": models, "current": current, "base": base}
+        return {
+            "configured": True,
+            "models": models,
+            "current": current,
+            "base": base,
+            "provider": snapshot["provider"],
+            "providers": PROVIDER_DEFAULTS,
+        }
+
+    @app.get("/api/llm/config")
+    async def get_llm_config() -> dict[str, Any]:
+        snapshot = llm_config_snapshot()
+        return {**snapshot, "providers": PROVIDER_DEFAULTS}
+
+    @app.put("/api/llm/config")
+    async def put_llm_config(update: LlmConfigUpdate) -> dict[str, Any]:
+        global _models_cache
+        if update.provider is not None:
+            provider = update.provider.strip().lower()
+            if provider not in PROVIDER_DEFAULTS:
+                raise HTTPException(status_code=400, detail=f"Unknown provider: {update.provider}")
+            _LLM_CONFIG_OVERRIDE["provider"] = provider
+            if update.baseUrl is None and provider in PROVIDER_DEFAULTS and PROVIDER_DEFAULTS[provider]:
+                # Switch base URL to the provider default unless explicitly given.
+                current = normalize_base_url(str(_LLM_CONFIG_OVERRIDE.get("baseUrl") or ""))
+                if not current:
+                    _LLM_CONFIG_OVERRIDE["baseUrl"] = PROVIDER_DEFAULTS[provider]
+        if update.baseUrl is not None:
+            _LLM_CONFIG_OVERRIDE["baseUrl"] = normalize_base_url(update.baseUrl)
+        if update.apiKey is not None:
+            _LLM_CONFIG_OVERRIDE["apiKey"] = update.apiKey
+        if update.model is not None:
+            _LLM_CONFIG_OVERRIDE["model"] = update.model.strip()
+            os.environ["LLM_MODEL"] = update.model.strip()
+        if update.temperature is not None:
+            if not 0.0 <= update.temperature <= 2.0:
+                raise HTTPException(status_code=400, detail="temperature must be 0..2")
+            _LLM_CONFIG_OVERRIDE["temperature"] = float(update.temperature)
+        if update.systemPrompt is not None:
+            _LLM_CONFIG_OVERRIDE["systemPrompt"] = update.systemPrompt
+        _models_cache = None
+        app.state.llm_fingerprint = None
+        snapshot = llm_config_snapshot()
+        return {**snapshot, "providers": PROVIDER_DEFAULTS}
+
+    @app.post("/api/llm/test")
+    async def test_llm_config(update: LlmConfigUpdate | None = None) -> dict[str, Any]:
+        # Optionally probe a candidate config without saving it.
+        global _LLM_CONFIG_OVERRIDE
+        saved = dict(_LLM_CONFIG_OVERRIDE)
+        try:
+            if update is not None:
+                if update.provider:
+                    _LLM_CONFIG_OVERRIDE["provider"] = update.provider.strip().lower()
+                if update.baseUrl is not None:
+                    _LLM_CONFIG_OVERRIDE["baseUrl"] = normalize_base_url(update.baseUrl)
+                if update.apiKey is not None:
+                    _LLM_CONFIG_OVERRIDE["apiKey"] = update.apiKey
+            ok, message = await asyncio.to_thread(test_llm_connection)
+            models: list[str] = []
+            if ok:
+                try:
+                    models = await fetch_llm_models_cached()
+                except Exception:  # noqa: BLE001 - connection ok, listing failed
+                    models = []
+            return {"ok": ok, "message": message, "models": models}
+        finally:
+            _LLM_CONFIG_OVERRIDE = saved
 
     @app.get("/api/knowledge/status")
     async def knowledge_status() -> dict[str, Any]:
