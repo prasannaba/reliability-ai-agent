@@ -12,7 +12,7 @@ from pathlib import Path
 import uvicorn
 from dotenv import load_dotenv
 
-from main import app
+from src.host.app import app
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 

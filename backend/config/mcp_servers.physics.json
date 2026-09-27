@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "physics-engineering": {
+      "command": "${PYTHON}",
+      "args": ["${BACKEND_DIR}/src/domains/physics/server.py"],
+      "cwd": "${BACKEND_DIR}",
+      "transport": "stdio"
+    }
+  }
+}

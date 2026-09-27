@@ -5,12 +5,12 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from mcp_client import ReliabilityMCPClient
+from src.host.mcp_pool import MultiMCPClient
 
 
 def test_mcp_server_lists_and_calls_tools():
     async def exercise_server():
-        client = ReliabilityMCPClient()
+        client = MultiMCPClient()
         await client.start()
         try:
             result = json.loads(await client.calculate_b_life(2.0, 1000.0, 10.0))

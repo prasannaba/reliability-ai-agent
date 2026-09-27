@@ -31,12 +31,12 @@ The LLM is the interface. Reliability math is not allowed to be next-token guess
 
 ## What it is
 
-- **Local-first or VPC** — your `LLM_API_BASE`, your `Knowledge_Base/`, plots under `backend/static`
+- **Local-first or VPC** — your `LLM_API_BASE`, your `knowledge-base/`, plots under `backend/static`
 - **Weibull probability paper** — Bernard / Herd–Johnson ranks, RRY (default) or MLE, optional bootstrap percentile bounds on B-life
 - **Censoring** — failures and suspensions on one figure
 - **Hybrid RAG** — Docling for PDF and Office, incremental embeddings, Chroma + BM25
 - **Tool-backed report** — one-page markdown whose tables match the plot
-- **Angular chat** — streaming answers, foldable thinking, attachments, model picker, MathJax (`\sb{...}` so markdown does not eat subscripts)
+- **React chat** — streaming answers, foldable thinking, attachments, model picker, MathJax (`\sb{...}` so markdown does not eat subscripts)
 
 It is not a public chatbot, a SaaS FMEA suite, or a model that is allowed to invent life metrics.
 
@@ -61,7 +61,7 @@ The UI never runs Weibull. Tools compute. RAG retrieves. The model writes.
 ```mermaid
 flowchart LR
   subgraph ui [Chat]
-    A[Angular 21]
+    A[React 19]
   end
   subgraph host [FastAPI]
     B[main.py]
@@ -73,7 +73,7 @@ flowchart LR
     F[Report export]
   end
   subgraph memory [On disk]
-    G[Knowledge_Base]
+    G[knowledge-base]
     H[Chroma + BM25]
   end
   subgraph llm [Your endpoint]
@@ -93,9 +93,11 @@ flowchart LR
 
 ```
 reliability-copilot/
-  Knowledge_Base/     handbooks, procedures, domain notes
-  backend/            FastAPI, MCP server, Weibull, RAG
-  frontend/           Angular chat (proxies to :8000 in dev)
+  knowledge-base/     handbooks, procedures, domain notes (physics: knowledge-base-physics/)
+  backend/src/host/   generic FastAPI MCP host (no domain code)
+  backend/src/domains/ pluggable MCP servers: reliability/, physics/ (prompt.md + domain.yaml each)
+  backend/config/     mcp_servers.<domain>.json (ACTIVE_DOMAIN selects)
+  frontend/           React chat (proxies to :8000 in dev)
   docs/               product notes
   scripts/            start, desktop WebView, production UI copy
   .env.example        copy to .env at this root — never commit secrets
@@ -139,7 +141,7 @@ Edit `.env`:
 | `LLM_TEMPERATURE` | Optional sampling temperature `0..2` (also editable in Chat Settings) |
 | `LLM_SYSTEM_PROMPT` | Optional extra instructions appended to the reliability system prompt |
 | `EMBEDDING_MODEL` | Local embedder for RAG |
-| `FRONTEND_ORIGIN` | CORS; include `http://localhost:4200` if you use `ng serve` |
+| `FRONTEND_ORIGIN` | CORS; include `http://localhost:4200` if you use `npm run dev` |
 | `PUBLIC_BASE_URL` | Leave empty so plot URLs stay same-origin (`/static/...`) |
 | `PORT` | FastAPI port (default `8000`) |
 
@@ -150,14 +152,14 @@ cd backend
 uv sync --all-groups
 ```
 
-**3. Knowledge index** (after you drop files into `Knowledge_Base/`)
+**3. Knowledge index** (after you drop files into `knowledge-base/`)
 
 Accepted: `.md`, `.txt`, `.pdf`, `.doc`, `.docx`, `.ppt`, `.pptx`. Attachments in chat also ingest.
 
 ```powershell
-uv run python knowledge_base.py
+uv run python -m src.knowledge.base
 # first machine, if you need to fetch the embedder:
-uv run python knowledge_base.py --download-model
+uv run python -m src.knowledge.base --download-model
 ```
 
 The vector store lives under `backend/.rag`.
@@ -170,7 +172,7 @@ From the repo root:
 .\scripts\build_ui.ps1
 ```
 
-That builds Angular and copies `frontend/dist/frontend/browser` → `backend/static/ui`.
+That builds the React UI and copies `frontend/dist/frontend/browser` → `backend/static/ui`.
 
 ---
 
@@ -180,7 +182,7 @@ That builds Angular and copies `frontend/dist/frontend/browser` → `backend/sta
 
 ```powershell
 cd backend
-uv run python main.py
+uv run python -m src.host.app
 ```
 
 Open [http://localhost:8000](http://localhost:8000). From the repo root you can also use `.\scripts\start.ps1`. Desktop WebView: `.\scripts\start-desktop.ps1`.
@@ -196,10 +198,35 @@ Metrics in the answer come from tools, not from the model.
 ```powershell
 cd frontend
 npm install
-npm start
+npm run dev
 ```
 
 [http://localhost:4200](http://localhost:4200) proxies `/api`, `/static`, and `/health` to port 8000.
+
+---
+
+## Running with Docker
+
+One image, three roles (see `docker-compose.yml`): the `app` host (API + UI on `:8000`) plus standalone MCP servers (`mcp-reliability` on `:8001`, opt-in `mcp-physics` on `:8002`). From the repo root:
+
+```powershell
+copy .env.example .env
+docker compose up --build -d
+```
+
+Open [http://localhost:8000](http://localhost:8000). No LLM provider is pre-selected: on first run, open Settings in the sidebar and pick yours — the choice persists across restarts.
+
+**If you already run an LLM** (Ollama, LM Studio, llama.cpp, LiteRT-LM) on your machine, nothing else is needed. A `localhost`/`127.0.0.1` URL works as-is: inside the container it is automatically mapped to your host. Your `knowledge-base/`, index (`backend/.rag`), plots, and reports are bind-mounted, so they survive image upgrades.
+
+**If you have no local LLM**, the compose file ships a dormant Ollama server for onboarding. Be aware of what it is and isn't:
+
+1. `docker compose --profile local-llm up --build -d` pulls the public `ollama/ollama` image (several GB, first time only) and starts an **empty** engine — it serves no models yet.
+2. Add a model: `docker compose exec ollama ollama pull llama3.1:8b` (weight download, persists in the `ollama-models` volume), *or* `docker compose exec ollama ollama signin` for Ollama cloud models (needs an Ollama account, no weight download).
+3. In the app's Settings, select provider `ollama` (the container reaches it at `http://ollama:11434`).
+
+Notes: containerized inference runs on CPU unless you configure GPU passthrough, so for everyday use the native Ollama Desktop app on your machine is usually the better LLM host.
+
+Set `ACTIVE_DOMAIN=physics` in `.env` (plus `--profile physics`) to run the physics pack instead — no code changes.
 
 ---
 
@@ -213,9 +240,19 @@ npm start
 | `export_reliability_report` | One-page markdown from **tool** outputs |
 | `calculate_mtbf` | Plugin under `backend/plugins/` |
 
-Add a plugin: `backend/plugins/<name>.py` with `def register(mcp):`. Extra stdio servers: `backend/mcp_servers.json`. Standalone host: `uv run python mcp_server.py`.
+Add a plugin: `backend/src/domains/<name>/plugins/<tool>.py` with `def register(mcp):`. Server lists: `backend/config/mcp_servers.<domain>.json` (stdio or HTTP entries). Swap domains with `ACTIVE_DOMAIN=physics` — no FastAPI changes.
 
-HTTP: `GET /health`, `GET /api/models` (now with `provider` + Ollama `/api/tags` fallback), `GET/PUT /api/llm/config` (provider, baseUrl, model, temperature, systemPrompt), `POST /api/llm/test`, knowledge status/upload, `POST /api/chat` and `POST /api/chat/stream` (`prompt`, `model`, `thinking`).
+Standalone domain servers (usable from Open Web UI / Unsloth Studio without the FastAPI app):
+
+```powershell
+cd backend
+uv run python -m src.domains.reliability.server --transport streamable-http --port 8001
+# tools at http://localhost:8001/mcp
+```
+
+or `docker compose up --build` (starts `app` + `mcp-reliability`; `--profile physics` adds the physics server on `:8002`).
+
+HTTP: `GET /health` (includes `domain`), `GET /api/domains`, `GET /api/mcp/tools`, `GET /api/models` (now with `provider` + Ollama `/api/tags` fallback), `GET/PUT /api/llm/config` (provider, baseUrl, model, temperature, systemPrompt), `POST /api/llm/test`, knowledge status/upload, `POST /api/chat` and `POST /api/chat/stream` (`prompt`, `model`, `thinking`).
 
 Chat UI (MDLithe-inspired, minus editor selection/pin/apply): provider badge + Chat Settings dialog (Ollama, LM Studio, llama.cpp, LiteRT-LM, Unsloth, OpenAI, custom) with test-connection and model refresh, model dropdown with manual id entry, multi-session history with search, per-message copy / edit-and-resend / regenerate, timestamps, model labels, response stats, stop-generating, and Markdown export with provider/model metadata.
 
@@ -232,7 +269,7 @@ uvx ruff check .
 
 ```powershell
 cd frontend
-npx --yes prettier@3 --check "src/**/*.{ts,html,css,json}" "angular.json" "package.json" "tsconfig.json" "tsconfig.app.json" "proxy.conf.json"
+npx --yes prettier@3 --check "src/**/*.{ts,tsx,css,json}" "package.json" "tsconfig.json" "vite.config.ts"
 ```
 
 Ruff is configured in `backend/pyproject.toml`. Prettier options live in `frontend/package.json`.

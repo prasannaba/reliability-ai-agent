@@ -2,159 +2,110 @@
 
 Summary
 - This document maps each frontend file to its role and shows the exact sequence of calls when a user sends a message in the chat UI.
-- Endpoint used by frontend: POST http://localhost:8000/api/chat
-- Request/response JSON shapes are shown below with examples.
+- Stack: React 19 + TypeScript + Vite. Dev server runs on http://localhost:4200 and proxies `/api`, `/static`, `/health` to the FastAPI backend at http://localhost:8000 (see `vite.config.ts`).
+- Chat uses server-sent events: POST `/api/chat/stream` with `{ prompt, model, thinking }`, streamed back as `data: {...}` events (`token`, `thought`, `tool_start`, `tool_end`, `image`, `done`, `error`).
+- On load the UI fetches `GET /api/domains` (active domain pack → sidebar badge + hero title) alongside models/config/knowledge; Settings → Domain & tools lists `GET /api/mcp/tools` (name + description per tool).
 
 Per-file map (frontend)
-- angular.json
-  - Role: Angular CLI build/serve configuration. Defines build/serve targets and assets.
-  - Importance: Controls production/dev builds and output hashing.
+- vite.config.ts
+  - Role: Vite dev/build configuration. Dev proxy, pinned `:4200` port, `dist/frontend/browser` output layout (consumed by `scripts/build_ui.*`).
+  - Importance: Keeps dev same-origin and the production bundle copy working.
 
-- tsconfig.json / tsconfig.app.json
-  - Role: TypeScript compiler options (project-level and app-level).
-  - Importance: Ensure correct compilation of Angular standalone components.
+- tsconfig.json
+  - Role: TypeScript compiler options (strict).
+  - Importance: `npm run build` type-checks before bundling (`tsc && vite build`).
 
 - package.json / package-lock.json
-  - Role: Dependencies and npm scripts.
+  - Role: Dependencies and npm scripts (`dev`, `build`, `test` via vitest).
   - Importance: Reproducible installs and build/test scripts.
 
-- src/main.ts
-  - Role: Bootstraps the Angular standalone application.
-  - Importance: Entry point that loads AppComponent and appConfig.
+- src/main.tsx
+  - Role: Entry point. Mounts `App` with the service layer.
+  - Importance: Wires UI to the backend implementation.
 
-- src/app/app.ts (AppComponent)
-  - Role: Root component; mounts ChatComponent.
+- src/App.tsx
+  - Role: Root component; renders `ChatPage`.
   - Importance: Minimal bootstrap for the chat UI.
 
-- src/app/app.config.ts
-  - Role: Provides router, HTTP client and markdown provider.
-  - Importance: Registers global providers used by ChatService and components.
+- src/pages/ChatPage.tsx
+  - Role: Chat screen: message thread, streaming orchestration, sessions/sidebar wiring, settings modal, export, empty-state hero, footer.
+  - Importance: Owns `runCompletion()` (SSE event handling), `sendMessage()`, regenerate, edit-and-resend, plot download.
 
-- src/app/app.routes.ts
-  - Role: Router configuration (empty here).
-  - Importance: Add routes if app expands beyond chat.
+- src/components/Composer.tsx
+  - Role: Prompt input (auto-growing textarea), attach button, model picker, send/stop buttons.
+  - Importance: Enter-to-send, file attach for knowledge-base upload.
 
-- src/app/components/chat/*
-  - chat.ts (ChatComponent)
-    - Role: UI logic, message list, form handling, scrolling.
-    - Importance: Adds user messages to messages[], calls ChatService.sendMessage(), processes responses, handles loading state and errors.
-  - chat.html
-    - Role: Template for the chat UI — message rendering, input form, loading indicator.
-    - Importance: Uses Markdown rendering for message content and shows generated images.
-  - chat.css
-    - Role: Styles for chat UI.
-    - Importance: Visual layout and typing indicator.
+- src/components/MessageItem.tsx
+  - Role: One chat turn: Markdown + MathJax rendering, plot image, thinking panel, copy/edit/regenerate actions.
+  - Importance: Per-message rendering and actions.
 
-- src/app/models/message.model.ts
-  - Role: Type definition for messages used by the UI.
-  - Importance: Ensures consistent shape for messages (role, content, imageUrl).
+- src/components/Sidebar.tsx
+  - Role: Chat history list (only chats with a user message), new chat, search, provider badge, Settings entry.
+  - Importance: Session navigation; empty chats stay out of the list.
 
-- src/app/services/chat.ts (ChatService)
-  - Role: Encapsulates HTTP communication to backend endpoint (apiUrl).
-  - Importance: Central place to change backend URL, add interceptors, transform payloads.
+- src/components/SettingsPanel.tsx
+  - Role: Settings modal — Chat (provider/model/temperature/system prompt/export format), Appearance (theme), Delete history sections.
+  - Importance: Single place for LLM endpoint config, theme, and destructive clear-all (with confirm).
+
+- src/components/ModelPicker.tsx
+  - Role: Model dropdown with manual id entry and refresh.
+  - Importance: Model selection inside the composer.
+
+- src/hooks/useSessions.ts
+  - Role: Chat sessions with localStorage persistence (stable schema/keys — do not rename). Always lands on a fresh chat; strips legacy welcome bubbles on load.
+  - Importance: Session CRUD, message updates, clear-all.
+
+- src/hooks/useTheme.ts
+  - Role: Theme preference (`system`/`light`/`dark`), applies `data-theme` + Bootstrap `data-bs-theme` on `<html>`.
+  - Importance: Light/dark mode for app and Bootstrap components.
+
+- src/services/* (http.ts, browser/httpApi.ts, types.ts)
+  - Role: `BackendService` interface: models, LLM config, knowledge status/upload, `streamMessage()` SSE client, static-URL resolution.
+  - Importance: Central place to change backend URL and streaming protocol.
+
+- src/types/chat.ts, src/types/llm.ts
+  - Role: `Message`/`ChatSession` shapes, LLM config/provider types, `WELCOME_MESSAGE` (empty-state hero text — display only, never stored as a message).
+  - Importance: Consistent shapes across UI, sessions, and services.
+
+- src/utils/* (format.ts, mathMarkdown.ts, mathjax.ts)
+  - Role: Titles/timestamps/stats formatting, `\sb{...}` TeX repair, MathJax re-render.
+  - Importance: Display helpers shared by thread and export.
 
 - src/styles.css
-  - Role: Global styles.
-  - Importance: App-wide styling.
+  - Role: Global styles + light/dark theme tokens.
+  - Importance: App-wide styling; new colors must define both themes.
 
 Concrete call trace (step-by-step) — UI action: user submits a message
 
-1. User types a query in the Chat input and presses "Send" (chat.html form submit).
-   - Component: ChatComponent.sendMessage()
+1. User types in `Composer` and presses Send (Enter).
+   - `ChatPage.sendMessage()` validates non-empty input, appends the user message, clears the box.
 
-2. ChatComponent.sendMessage() (frontend)
-   - Validates non-empty userInput.
-   - Creates a user message object: { role: 'user', content: "<user text>" } and pushes to this.messages.
-   - Sets isLoading = true, clears userInput to give immediate UI feedback.
-   - scrollToBottom() to show the new message.
+2. `ChatPage.runCompletion(prompt)` opens the stream.
+   - Creates an empty assistant draft, calls `backend.streamMessage(prompt, onEvent, signal, model, thinking)`.
 
-3. ChatComponent calls ChatService.sendMessage(prompt)
-   - Service: src/app/services/chat.ts
-
-4. ChatService.sendMessage(prompt) — HTTP request
+3. `streamMessage()` — HTTP request (`src/services/browser/httpApi.ts` → `streamSse` in `src/services/http.ts`)
    - Method: POST
-   - URL: http://localhost:8000/api/chat
-   - Headers: application/json (HttpClient default)
+   - URL: `/api/chat/stream` (same origin in dev via proxy, backend origin in production)
    - Body (example):
      {
-       "prompt": "How do I compute Weibull shape parameter from failure times?"
-     }
-   - Returns Observable<ChatResponse>
-
-5. Network transit → Backend receives POST /api/chat
-   - Typical backend middleware: body parser, auth (if any), logging.
-   - Backend handler responsibilities:
-     - Validate request JSON (presence of prompt).
-     - Run business logic: call language model, compute reliability metrics, generate plots (optionally save plot and produce image URL), and prepare assistant text answer.
-     - Construct response JSON with fields `content` and `image_url` (nullable).
-   - Example backend response (success):
-     {
-       "content": "You can estimate the Weibull shape parameter using MLE. Steps:\n1. ...\n2. ...\n",
-       "image_url": "http://localhost:8000/static/plots/weibull_fit.png"
-     }
-   - Example backend response (no image):
-     {
-       "content": "Here is the calculation summary ...",
-       "image_url": null
-     }
-   - On error, backend returns appropriate HTTP status (e.g., 400/500) and JSON error body:
-     {
-       "error": "Invalid input"
+       "prompt": "Fit Weibull to failures 150, 180, 220, 310 with suspensions 800, 800",
+       "thinking": true
      }
 
-6. Frontend receives Observable result (ChatComponent.subscribe)
-   - On next (200 OK with ChatResponse):
-     - Create assistant message:
-       {
-         role: 'assistant',
-         content: response.content,
-         imageUrl: response.image_url || undefined
-       }
-     - Push assistant message into this.messages.
-     - Set isLoading = false and scrollToBottom().
-   - On error (network or non-2xx):
-     - Push assistant error message with friendly text ("Sorry, something went wrong...").
-     - Set isLoading = false; log error to console.
+4. Network transit → Backend receives POST `/api/chat/stream`
+   - Backend deterministically retrieves knowledge-base context for the prompt, runs the ReAct agent (LLM + MCP tools for Weibull math/plots), and streams SSE events:
+     `{"type":"thought",...}`, `{"type":"tool_start",...}`, `{"type":"token",...}`, `{"type":"image",...}`, `{"type":"done",...}`.
 
-7. UI rendering
-   - Template uses <markdown> to render message.content (supports markdown).
-   - If message.imageUrl exists, template shows <img [src]="msg.imageUrl"> below content.
-   - chat.css ensures images are sized/responsive and messages styled.
+5. `onEvent` in `runCompletion()` applies each event to the draft (tokens, thinking text, tool steps, plot URL) and re-renders via `requestAnimationFrame`, scrolling to bottom.
+
+6. On finish: stats line is stamped, thinking panel collapses, MathJax re-renders.
 
 Sequence summary (compact)
-- UI submit → ChatComponent (adds user message, loading) → ChatService POST /api/chat → Backend controller processes prompt → Backend returns { content, image_url } → ChatComponent adds assistant message (content + image) and clears loading → UI updates.
+- UI submit → `sendMessage` (adds user message) → `runCompletion` POST `/api/chat/stream` → backend streams SSE (thought/tool/token/image/done) → draft updates per event → final content + stats rendered.
 
 Notes and extension points
-- CORS: If backend is on different origin, ensure backend adds CORS header or use a proxy.
-- Auth: include Authorization header via HttpInterceptor if authentication required.
-- Streaming: For streaming model outputs, extend ChatService to use EventSource or fetch stream and update ChatComponent incrementally.
-- Retry/timeouts: Consider RxJS operators (retry, timeout) in ChatService for resilient calls.
-- Error schema: Standardize backend error shape to include code/message for structured handling.
-
-Example request/response snippets (copy‑paste)
-- Request:
-  POST http://localhost:8000/api/chat
-  Content-Type: application/json
-
-  {
-    "prompt": "Fit a Weibull distribution to these failure times: [12, 34, 56]"
-  }
-
-- Success response:
-  HTTP/1.1 200 OK
-  Content-Type: application/json
-
-  {
-    "content": "Estimated shape k = 1.84, scale λ = 45.2.\nPlot attached.",
-    "image_url": "http://localhost:8000/static/plots/fit_2025-12-01.png"
-  }
-
-- Error response:
-  HTTP/1.1 500 Internal Server Error
-  Content-Type: application/json
-
-  {
-    "error": "Model inference failed"
-  }
+- CORS: dev is same-origin via Vite proxy; production UI is served by FastAPI itself (same origin).
+- Knowledge upload: attach button → POST `/api/knowledge/upload`, auto-indexed on next search.
+- Error schema: `{"type":"error","message":...}` events and non-2xx HTTP; surfaced inline in the thread.
 
 End of document.

@@ -1,0 +1,8 @@
+# Physics domain manifest. Served by the generic FastAPI host when
+# ACTIVE_DOMAIN=physics (see backend/config/mcp_servers.physics.json).
+name: physics
+title: Physics Copilot
+mcp_server: physics-engineering
+collection: physics_knowledge
+knowledge_dir: knowledge-base-physics
+index_dir: .rag-physics

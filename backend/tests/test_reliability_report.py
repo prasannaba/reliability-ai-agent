@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from reliability_report import build_reliability_report
+from src.domains.reliability.reliability_report import build_reliability_report
 
 
 def test_report_mentions_tools_and_not_reliasoft_replacement():

@@ -9,7 +9,7 @@ Copy and adapt. Do not claim ReliaSoft replacement.
 
 **Product / this repo:**
 
-- Built a **local Reliability Copilot** (Python MCP + FastAPI + Angular): company documents stay on disk; OpenAI-compatible local or cloud LLM is configurable.
+- Built a **local Reliability Copilot** (Python MCP + FastAPI + React): company documents stay on disk; OpenAI-compatible local or cloud LLM is configurable.
 - Implemented **Weibull probability paper** in Python (Bernard/Herd-Johnson ranks, η at 63.2%, β reference construction), with **right-censored suspensions**, RRY (default) or MLE, and **bootstrap percentile bounds** on B-life.
 - Exposed analysis as **MCP tools** so β, η, MTBF, and B10/B20/B30 are **computed, never invented** by the language model; optional one-page design-review report.
 - Private hybrid RAG (Chroma + BM25, incremental embed) over reliability handbooks and team procedures.

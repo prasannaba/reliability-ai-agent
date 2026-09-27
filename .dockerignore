@@ -1,0 +1,20 @@
+node_modules/
+dist/
+**/.venv/
+**/.rag/
+**/__pycache__/
+**/.ruff_cache/
+**/.pytest_cache/
+**/.coverage/
+# Never bake local secrets or overrides into the image.
+.env
+.env.*
+**/.llm_config.json
+**/.llm_secret.enc
+**/.credential.key
+static/ui/
+.git/
+frontend/dist/
+frontend/node_modules/
+frontend/.angular/
+*.bundle

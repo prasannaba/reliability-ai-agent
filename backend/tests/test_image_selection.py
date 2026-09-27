@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from main import infer_latest_image_url
+from src.host.app import infer_latest_image_url
 
 
 def test_infer_latest_image_url_prefers_latest_generated_file(tmp_path):

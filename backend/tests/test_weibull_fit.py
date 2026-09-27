@@ -5,7 +5,7 @@ import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from weibull_fit import adjusted_median_ranks, b_life, fit_weibull, mtbf
+from src.domains.reliability.weibull_fit import adjusted_median_ranks, b_life, fit_weibull, mtbf
 
 
 def test_bernard_ranks_without_censoring_match_classic_formula():

@@ -30,7 +30,8 @@
       "args": [
         "run",
         "python",
-        "mcp_server.py"
+        "-m",
+        "src.domains.reliability.server"
       ],
       "options": {
         "cwd": "${workspaceFolder}/backend"

@@ -11,7 +11,7 @@ if (Test-Path $dest) {
 }
 $browser = "$root\frontend\dist\frontend\browser"
 if (-not (Test-Path $browser)) {
-    throw "Angular build output not found at $browser"
+    throw "Frontend build output not found at $browser"
 }
 Copy-Item "$browser\*" $dest -Recurse -Force
 Write-Host "UI copied to $dest"

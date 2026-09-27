@@ -1,43 +1,33 @@
 {
   "name": "frontend",
-  "version": "3.6.0",
+  "version": "3.8.0",
+  "type": "module",
   "scripts": {
-    "ng": "ng",
-    "start": "ng serve",
-    "build": "ng build --configuration production",
-    "watch": "ng build --watch --configuration development"
-  },
-  "prettier": {
-    "printWidth": 100,
-    "singleQuote": true,
-    "overrides": [
-      {
-        "files": "*.html",
-        "options": {
-          "parser": "angular"
-        }
-      }
-    ]
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "private": true,
   "packageManager": "npm@11.6.4",
   "dependencies": {
-    "@angular/common": "^21.0.0",
-    "@angular/compiler": "^21.0.0",
-    "@angular/core": "^21.0.0",
-    "@angular/forms": "^21.0.0",
-    "@angular/platform-browser": "^21.0.0",
-    "marked": "^17.0.1",
-    "ngx-markdown": "^21.0.1",
-    "rxjs": "~7.8.0",
-    "tslib": "^2.3.0"
+    "bootstrap": "^5.3.8",
+    "react": "^19.1.1",
+    "react-bootstrap": "^2.10.10",
+    "react-bootstrap-icons": "^1.11.6",
+    "react-dom": "^19.1.1",
+    "react-markdown": "^10.1.0",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
-    "@angular/build": "^21.0.2",
-    "@angular/cli": "^21.0.2",
-    "@angular/compiler-cli": "^21.0.0",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.4",
     "jsdom": "^27.1.0",
     "typescript": "~5.9.2",
+    "vite": "^7.1.7",
     "vitest": "^4.0.8"
   }
 }

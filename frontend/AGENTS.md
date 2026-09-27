@@ -1,5 +1,4 @@
-
-You are an expert in TypeScript, Angular, and scalable web application development. You write functional, maintainable, performant, and accessible code following Angular and TypeScript best practices.
+You are an expert in TypeScript, React, and scalable web application development. You write functional, maintainable, performant, and accessible code following React and TypeScript best practices.
 
 ## TypeScript Best Practices
 
@@ -7,15 +6,14 @@ You are an expert in TypeScript, Angular, and scalable web application developme
 - Prefer type inference when the type is obvious
 - Avoid the `any` type; use `unknown` when type is uncertain
 
-## Angular Best Practices
+## React Best Practices
 
-- Always use standalone components over NgModules
-- Must NOT set `standalone: true` inside Angular decorators. It's the default in Angular v20+.
-- Use signals for state management
-- Implement lazy loading for feature routes
-- Do NOT use the `@HostBinding` and `@HostListener` decorators. Put host bindings inside the `host` object of the `@Component` or `@Directive` decorator instead
-- Use `NgOptimizedImage` for all static images.
-  - `NgOptimizedImage` does not work for inline base64 images.
+- Use function components with hooks; no class components
+- Use `useState` for local state, `useMemo`/`useCallback` for derived values and stable callbacks
+- Keep components small and focused on a single responsibility
+- Colocate state as low as possible; lift only what siblings need
+- Do not run side effects during render — use `useEffect` with a correct dependency array
+- Clean up subscriptions, timers, and animation frames in effect teardowns
 
 ## Accessibility Requirements
 
@@ -25,32 +23,22 @@ You are an expert in TypeScript, Angular, and scalable web application developme
 ### Components
 
 - Keep components small and focused on a single responsibility
-- Use `input()` and `output()` functions instead of decorators
-- Use `computed()` for derived state
-- Set `changeDetection: ChangeDetectionStrategy.OnPush` in `@Component` decorator
-- Prefer inline templates for small components
-- Prefer Reactive forms instead of Template-driven ones
-- Do NOT use `ngClass`, use `class` bindings instead
-- Do NOT use `ngStyle`, use `style` bindings instead
-- When using external templates/styles, use paths relative to the component TS file.
+- Keep JSX simple; extract helpers for complex rendering logic
+- Prefer controlled inputs
+- Use `aria-label`/`aria-pressed`/`role` on icon-only buttons
 
 ## State Management
 
-- Use signals for local component state
-- Use `computed()` for derived state
 - Keep state transformations pure and predictable
-- Do NOT use `mutate` on signals, use `update` or `set` instead
+- Prefer functional updates (`setState((prev) => ...)`) when the next value depends on the previous one
+- Do not mutate state objects in place
 
-## Templates
+## Styling
 
-- Keep templates simple and avoid complex logic
-- Use native control flow (`@if`, `@for`, `@switch`) instead of `*ngIf`, `*ngFor`, `*ngSwitch`
-- Use the async pipe to handle observables
-- Do not assume globals like (`new Date()`) are available.
-- Do not write arrow functions in templates (they are not supported).
+- Global theme tokens live in `src/styles.css` (`:root` + `[data-theme="dark"]`); add new colors as tokens, not hardcoded values
+- Every new color token needs both a light and a dark value
 
 ## Services
 
 - Design services around a single responsibility
-- Use the `providedIn: 'root'` option for singleton services
-- Use the `inject()` function instead of constructor injection
+- Keep HTTP/streaming details inside `src/services`; components consume the `BackendService` interface

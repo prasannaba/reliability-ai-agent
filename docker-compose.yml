@@ -1,0 +1,150 @@
+# Reliability Copilot — prod deployment (pluggable MCP domains).
+# Usage:
+#   cp .env.example .env   # then set LLM_API_BASE (and optional Ollama below)
+#   docker compose up --build            # app + standalone reliability MCP server
+#   docker compose --profile local-llm up --build   # + local Ollama server
+#   docker compose --profile physics up --build     # + example physics MCP server
+#
+# Services:
+#   app               FastAPI host (API + UI on :8000). ACTIVE_DOMAIN selects the
+#                     domain pack (reliability default); the host spawns that
+#                     domain's MCP server over stdio by itself.
+#   mcp-reliability   Same image, standalone reliability MCP over streamable HTTP
+#                     (:8001/mcp) for external hosts (Open Web UI, Unsloth Studio).
+#   mcp-physics       Same image, physics template domain (:8002/mcp, opt-in profile).
+#   ollama            Empty local LLM engine (opt-in profile; pull a model first).
+#
+# Data that must survive upgrades lives in volumes, not in the image:
+#   knowledge-base/  your handbooks, procedures, bios (also addable via chat upload)
+#   knowledge-base-physics/  physics notes (physics domain only)
+#   backend/.rag/    Chroma + BM25 index (auto-rebuilt incrementally on change)
+#   backend/.rag-physics/    physics index (physics domain only)
+#   backend/static/  Weibull plots and generated reports
+services:
+  app:
+    build: .
+    ports:
+      - "${PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      PORT: "${PORT:-8000}"
+      # Domain pack served by the host (reliability | physics). Switching needs
+      # no code changes — prompt, tools, and KB all follow ACTIVE_DOMAIN.
+      ACTIVE_DOMAIN: "${ACTIVE_DOMAIN:-reliability}"
+      # Inside a container the server MUST bind 0.0.0.0 (loopback default only
+      # applies to bare-metal runs). Set APP_TOKEN in .env for any shared host.
+      HOST: "0.0.0.0"
+      # Leave empty so plot URLs stay same-origin (/static/...) behind any host/proxy.
+      PUBLIC_BASE_URL: ""
+      # No default LLM provider here by design: on first run the user picks
+      # one in Settings and the choice persists (backend/.llm_config.json).
+      # Optional preselect via .env (LLM_PROVIDER + LLM_API_BASE).
+      # Loopback hosts in any LLM URL are auto-mapped to host.docker.internal
+      # inside the container (see DOCKER_CONTAINER in the Dockerfile).
+    # host.docker.internal is predefined on Docker Desktop (Win/Mac);
+    # host-gateway covers Linux engines too.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./knowledge-base:/app/knowledge-base
+      - ./backend/.rag:/app/backend/.rag
+      - ./backend/static:/app/backend/static
+    # Image runs as UID 10000 (see Dockerfile): host bind-mounts must be
+    # writable by it (e.g. `chown -R 10000:10000 knowledge-base knowledge-base-physics backend/.rag backend/.rag-physics`).
+    # Container hardening: no new privileges, no capabilities, bounded PIDs.
+    # NOTE: no `read_only: true` — the app legitimately writes .rag index,
+    # static plots, and the encrypted secret file under /app.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    restart: unless-stopped
+
+  # Standalone reliability MCP server over streamable HTTP. External MCP hosts
+  # (Open Web UI, Unsloth Studio, ...) can consume it directly WITHOUT the
+  # FastAPI app: tools at http://<host>:8001/mcp (SSE fallback on /sse).
+  # The app itself still uses the local stdio entry in
+  # backend/config/mcp_servers.reliability.json by default; point it at
+  # http://mcp-reliability:8001/mcp via MCP_SERVERS_CONFIG to share one server.
+  mcp-reliability:
+    build: .
+    command: ["uv", "run", "--no-sync", "python", "-m", "src.domains.reliability.server", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8001"]
+    ports:
+      - "${MCP_PUBLISH_PORT:-8001}:8001"
+    env_file:
+      - .env
+    environment:
+      MCP_PORT: "8001"
+    volumes:
+      - ./knowledge-base:/app/knowledge-base
+      - ./backend/.rag:/app/backend/.rag
+      - ./backend/static:/app/backend/static
+    # Base image HEALTHCHECK targets the app (:8000); the MCP listener gets a
+    # TCP check on its own port instead.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,socket;socket.create_connection(('127.0.0.1',int(os.environ.get('MCP_PORT','8001'))),timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    restart: unless-stopped
+
+  # Example second domain (opt-in). Enable with
+  #   docker compose --profile physics up --build
+  # then run the app with ACTIVE_DOMAIN=physics to chat through it with no
+  # FastAPI code changes — or point Open Web UI at http://<host>:8002/mcp.
+  mcp-physics:
+    profiles: ["physics"]
+    build: .
+    command: ["uv", "run", "--no-sync", "python", "-m", "src.domains.physics.server", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8002"]
+    ports:
+      - "${MCP_PHYSICS_PUBLISH_PORT:-8002}:8002"
+    env_file:
+      - .env
+    environment:
+      MCP_PORT: "8002"
+    volumes:
+      - ./knowledge-base-physics:/app/knowledge-base-physics
+      - ./backend/.rag-physics:/app/backend/.rag-physics
+      - ./backend/static:/app/backend/static
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,socket;socket.create_connection(('127.0.0.1',int(os.environ.get('MCP_PORT','8002'))),timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    restart: unless-stopped
+
+  # Optional local LLM (Ollama). Enable with --profile local-llm, then set
+  # LLM_API_BASE=http://ollama:11434  (inside compose network)
+  # or LLM_API_BASE=http://localhost:11434 (Docker Desktop) in .env.
+  ollama:
+    # Pinned by digest (latest as of 2026-09-17); refresh with
+    # `docker pull ollama/ollama:latest && docker inspect --format='{{.RepoDigests}}' ollama/ollama:latest`.
+    image: ollama/ollama:latest@sha256:da6e0dc5651df159e45686fd663c4dbe1624a52c44d7280eeac1551d8f865532
+    profiles: ["local-llm"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    restart: unless-stopped
+
+volumes:
+  ollama-models:

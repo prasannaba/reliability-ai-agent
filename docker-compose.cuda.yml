@@ -1,0 +1,56 @@
+# CUDA/GPU variant of the reliability-copilot stack.
+#
+# Default images are CPU-only (UV_TORCH_BACKEND=cpu): embeddings never need
+# CUDA, and CPU torch keeps the image far slimmer (measured ~10GB vs ~28GB
+# with CUDA libs). Use this file on CUDA hosts with high memory where you
+# want GPU embeddings:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.cuda.yml up --build -d
+#
+# Requirements on the host:
+#   - NVIDIA GPU + recent driver (cu130 needs R470+; use cu132 for newest cards)
+#   - NVIDIA Container Toolkit (provides the GPU device passthrough below)
+#
+# To target a different CUDA channel, edit TORCH_BACKEND below (valid values
+# include cpu, cu126, cu128, cu130, cu132; must carry the locked torch
+# version — check with:
+#   uv run --no-project python -c "import urllib.request,re; \
+#     print(sorted(set(re.findall(r'torch-([\d.]+)\+', \
+#     urllib.request.urlopen('https://download.pytorch.org/whl/<ch>/torch/').read().decode()))))"
+# ). Rebuilding after any TORCH_BACKEND change is required (torch is baked in).
+services:
+  app:
+    build:
+      args:
+        TORCH_BACKEND: cu130
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  mcp-reliability:
+    build:
+      args:
+        TORCH_BACKEND: cu130
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  mcp-physics:
+    build:
+      args:
+        TORCH_BACKEND: cu130
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

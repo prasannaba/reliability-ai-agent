@@ -1,0 +1,20 @@
+{
+  // Portable MCP config: standard "mcpServers" format shared by VS Code
+  // (root .mcp.json), Claude Desktop, Cursor, Cline, Windsurf, and
+  // Unsloth Studio's "Import config".
+  // NOTE for Unsloth import: it does NOT expand VS Code variables, so
+  // replace ${workspaceFolder} with the absolute repo path before importing
+  // there. VS Code, Claude Desktop and Cursor expand it natively.
+  "mcpServers": {
+    "reliability-engineering": {
+      "command": "${workspaceFolder}/backend/.venv/Scripts/python.exe",
+      "args": ["${workspaceFolder}/backend/src/domains/reliability/server.py"],
+      "cwd": "${workspaceFolder}/backend"
+    },
+    "physics-engineering": {
+      "command": "${workspaceFolder}/backend/.venv/Scripts/python.exe",
+      "args": ["${workspaceFolder}/backend/src/domains/physics/server.py"],
+      "cwd": "${workspaceFolder}/backend"
+    }
+  }
+}

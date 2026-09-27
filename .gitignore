@@ -30,6 +30,7 @@
 
 # Miscellaneous
 /.angular/cache
+/frontend/.angular/
 .sass-cache/
 /connect.lock
 /coverage
@@ -60,6 +61,9 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+/backend/.llm_config.json
+/backend/.llm_secret.enc
+/backend/.credential.key
 /.rag/
 /backend/.rag/
 

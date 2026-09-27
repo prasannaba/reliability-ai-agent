@@ -1,0 +1,9 @@
+# Reliability domain manifest. The generic FastAPI host reads this file
+# (plus prompt.md and config/mcp_servers.reliability.json) to serve this
+# domain. No host code mentions reliability directly.
+name: reliability
+title: Reliability Copilot
+mcp_server: reliability-engineering
+collection: reliability_knowledge
+knowledge_dir: knowledge-base
+index_dir: .rag

@@ -1,15 +1,15 @@
 [project]
 name = "reliability-copilot-backend"
-version = "3.6.0"
-description = "Local-first reliability engineering agent with MCP tools and FastAPI."
+version = "3.8.0"
+description = "Local-first engineering agent: generic FastAPI MCP host + pluggable domain MCP servers."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.139,<1",
     "chromadb>=1.5,<2",
+    "cryptography>=42,<47",
     "docling>=2.70,<3",
     "llama-index-core>=0.14,<0.15",
-    "llama-index-embeddings-huggingface>=0.7,<0.8",
     "llama-index-llms-openai-like>=0.7,<0.8",
     "matplotlib>=3.10,<4",
     "mcp>=2,<3",
@@ -30,19 +30,27 @@ dependencies = [
 dev = [
     "pytest>=8,<9",
 ]
+# Cloud multi-user extras (NOT installed by default): Azure Key Vault secret
+# backend + managed-identity auth. Enable with `uv sync --group cloud`.
+cloud = [
+    "azure-identity>=1.18,<2",
+    "azure-keyvault-secrets>=4.9,<5",
+]
 
 [tool.uv]
 package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# NOTE: keep this exactly ["."]. Adding "src" would create duplicate modules
+# (src.host.app AND host.app) with split singletons/monkeypatch targets.
 pythonpath = ["."]
 
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-src = ["."]
-exclude = [".venv", ".rag", "__pycache__"]
+src = ["src", "."]
+exclude = [".venv", ".rag", ".rag-physics", "__pycache__"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP"]

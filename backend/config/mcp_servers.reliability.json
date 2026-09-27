@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "reliability-engineering": {
+      "command": "${PYTHON}",
+      "args": ["${BACKEND_DIR}/src/domains/reliability/server.py"],
+      "cwd": "${BACKEND_DIR}",
+      "transport": "stdio"
+    }
+  }
+}

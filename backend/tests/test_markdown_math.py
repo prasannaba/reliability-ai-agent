@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from markdown_math import patch_markdown_math, repair_tex
+from src.common.markdown_math import patch_markdown_math, repair_tex
 
 
 def test_escapes_percent_inside_math():
