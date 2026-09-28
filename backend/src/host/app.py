@@ -594,6 +594,41 @@ _ALWAYS_DENIED_NETS = tuple(
 )
 
 
+def public_img_src() -> str:
+    """Extra CSP `img-src` origin derived from PUBLIC_BASE_URL, if configured.
+
+    Plot URLs are same-origin relative by default (PUBLIC_BASE_URL empty),
+    which 'self' already covers. When an operator sets an absolute public
+    base (e.g. behind a proxy), images would otherwise trip on `img-src
+    'self'` exactly like the localhost/127.0.0.1 mismatch did. Returns ""
+    when no extra origin is needed.
+    """
+    raw = (os.getenv("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    if not raw:
+        return ""
+    try:
+        parts = urllib.parse.urlsplit(raw)
+    except ValueError:
+        return ""
+    if parts.scheme.lower() not in ("http", "https") or not parts.hostname:
+        return ""
+    origin = f"{parts.scheme.lower()}://{parts.hostname.lower()}"
+    if parts.port:
+        origin += f":{parts.port}"
+    return origin
+
+
+def content_security_policy() -> str:
+    """Tight CSP; `img-src` additionally allows the public base origin."""
+    extra = public_img_src()
+    img_src = f"img-src 'self' data: blob:{(' ' + extra) if extra else ''};"
+    return (
+        f"default-src 'self'; {img_src} "
+        "style-src 'self' 'unsafe-inline'; script-src 'self'; "
+        "connect-src 'self'; frame-ancestors 'none'"
+    )
+
+
 def allow_private_llm() -> bool:
     """Local-first default: loopback/LAN LLM servers (Ollama, llama.cpp)
     keep working out of the box. Cloud deployments MUST set
@@ -1178,11 +1213,7 @@ def create_app() -> FastAPI:
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         # No inline-script reliance in served UI; keep CSP tight.
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; img-src 'self' data: blob:; "
-            "style-src 'self' 'unsafe-inline'; script-src 'self'; "
-            "connect-src 'self'; frame-ancestors 'none'"
-        )
+        response.headers["Content-Security-Policy"] = content_security_policy()
         return response
 
     @app.middleware("http")

@@ -4231,7 +4231,7 @@ wheels = [
 
 [[package]]
 name = "reliability-copilot-backend"
-version = "3.7.0"
+version = "3.9.0"
 source = { virtual = "." }
 dependencies = [
     { name = "chromadb" },

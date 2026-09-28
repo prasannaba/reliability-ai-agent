@@ -60,6 +60,30 @@ describe('plot URL resolution', () => {
     expect(blob.type).toBe('image/png');
     expect(blob.size).toBeGreaterThan(0);
   });
+
+  it('collapses absolute backend URLs to same-origin paths (any loopback spelling)', () => {
+    // Plot URL baked as localhost, page opened via 127.0.0.1 (or vice versa):
+    // without this the browser treats it as cross-origin and img-src 'self'
+    // plus CORS block both display and download.
+    expect(resolveBackendUrl('http://127.0.0.1:8000', 'http://localhost:8000/static/plot.png')).toBe(
+      '/static/plot.png',
+    );
+    expect(resolveBackendUrl('http://localhost:8000', 'http://127.0.0.1:8000/static/plot.png')).toBe(
+      '/static/plot.png',
+    );
+    expect(resolveBackendUrl('http://192.168.1.5:8000', 'http://192.168.1.5:8000/static/plot.png')).toBe(
+      '/static/plot.png',
+    );
+  });
+
+  it('keeps absolute URLs that address a different backend', () => {
+    expect(resolveBackendUrl('http://127.0.0.1:8000', 'http://localhost:9000/static/plot.png')).toBe(
+      'http://localhost:9000/static/plot.png',
+    );
+    expect(resolveBackendUrl('http://127.0.0.1:8000', 'https://localhost:8000/static/plot.png')).toBe(
+      'https://localhost:8000/static/plot.png',
+    );
+  });
 });
 
 describe('service selection', () => {

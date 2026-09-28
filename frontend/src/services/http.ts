@@ -57,7 +57,24 @@ export function isDirectImageUrl(url: string): boolean {
  *  Those can never load in a browser, so collapse them to the served
  *  static file of the same name. */
 export function resolveBackendUrl(baseUrl: string, url: string): string {
-  if (!url || isDirectImageUrl(url)) {
+  if (!url) {
+    return url;
+  }
+  if (/^https?:\/\//i.test(url)) {
+    // Absolute backend URL on our own host (any loopback spelling) → collapse
+    // to a same-origin path so CSP/CORS can never diverge on hostnames.
+    // Anything else absolute stays untouched.
+    try {
+      const collapsed = collapseBackendUrl(baseUrl, new URL(url));
+      if (collapsed) {
+        return collapsed;
+      }
+    } catch {
+      // Not parseable as an absolute URL — fall through to the cases below.
+    }
+    return url;
+  }
+  if (isDirectImageUrl(url)) {
     return url;
   }
   // A Windows drive prefix (`C:\...`, `C:/...`) is a filesystem path, not
@@ -77,6 +94,50 @@ export function resolveBackendUrl(baseUrl: string, url: string): string {
   // which can load in a webview — collapse to the served file of the same name.
   const name = url.split(/[\\/]/).pop() || url;
   return joinUrl(baseUrl, `/static/${name}`);
+}
+
+/** True for loopback hostnames (`localhost`, `127.*`, `::1`). */
+export function isLoopbackHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  return (
+    h === 'localhost' ||
+    h === '::1' ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)
+  );
+}
+
+function defaultPortFor(scheme: string): string {
+  return scheme === 'https:' ? '443' : '80';
+}
+
+/** Collapse an absolute backend URL to a same-origin path when it addresses
+ *  the backend we are already talking to (loopback spellings like
+ *  `localhost` vs `127.0.0.1` count as the same host). Without this, a plot
+ *  URL baked with one spelling breaks on a page opened with another: the
+ *  browser treats it as cross-origin, `img-src 'self'` blocks the image and
+ *  CORS blocks the download fetch. Returns null when no collapse applies. */
+function collapseBackendUrl(baseUrl: string, url: URL): string | null {
+  let ref: URL | null = null;
+  try {
+    if (baseUrl) {
+      ref = new URL(baseUrl);
+    } else if (typeof window !== 'undefined' && window.location?.origin) {
+      ref = new URL(window.location.origin);
+    }
+  } catch {
+    ref = null;
+  }
+  if (!ref || url.protocol !== ref.protocol) {
+    return null;
+  }
+  const sameHost =
+    url.hostname === ref.hostname ||
+    (isLoopbackHost(url.hostname) && isLoopbackHost(ref.hostname));
+  const samePort = (url.port || defaultPortFor(url.protocol)) === (ref.port || defaultPortFor(ref.protocol));
+  if (!sameHost || !samePort) {
+    return null;
+  }
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 /** Decode a `data:` URL to a Blob (for plot downloads without a fetch round-trip). */

@@ -11,10 +11,10 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM python:3.12-slim AS app
-# Torch backend for the image (uv native: UV_TORCH_BACKEND).
-#   cpu (default)  slim image; embeddings never need CUDA.
-#   cu130          GPU image for CUDA hosts (see docker-compose.cuda.yml).
+# Torch backend for the image (default CPU: embeddings never need CUDA).
 # Local `uv sync` runs are unaffected and keep GPU torch where available.
+#   cpu (default)  slim image; overridden per build with --build-arg.
+#   cu130          GPU image for CUDA hosts (see docker-compose.cuda.yml).
 ARG TORCH_BACKEND=cpu
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -30,8 +30,27 @@ COPY backend/pyproject.toml backend/uv.lock ./
 # re-downloading torch/sentence-transformers/etc. from scratch.
 # --no-dev keeps pytest out of the image; the optional cloud group stays for
 # Azure Key Vault secret backends.
+#
+# Torch GPU stack (torch, torchvision, triton, cuda-*, nvidia-*) is excluded
+# from the lockfile sync and installed explicitly on the next line: `uv sync`
+# alone does not remap the locked PyPI torch to UV_TORCH_BACKEND on Linux,
+# while `uv pip install` does on every platform. TORCH_PIN must match
+# backend/uv.lock (torchvision pins torch exactly, so drift fails loudly).
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --group cloud
+    uv sync --frozen --no-dev --group cloud \
+      --no-install-package torch --no-install-package torchvision \
+      --no-install-package triton \
+      --no-install-package cuda-bindings --no-install-package cuda-pathfinder \
+      --no-install-package cuda-toolkit \
+      --no-install-package nvidia-cublas --no-install-package nvidia-cuda-cupti \
+      --no-install-package nvidia-cuda-nvrtc --no-install-package nvidia-cuda-runtime \
+      --no-install-package nvidia-cudnn-cu13 --no-install-package nvidia-cufft \
+      --no-install-package nvidia-cufile --no-install-package nvidia-curand \
+      --no-install-package nvidia-cusolver --no-install-package nvidia-cusparse \
+      --no-install-package nvidia-cusparselt-cu13 --no-install-package nvidia-nccl-cu13 \
+      --no-install-package nvidia-nvjitlink --no-install-package nvidia-nvshmem-cu13 \
+      --no-install-package nvidia-nvtx \
+    && uv pip install --python .venv/bin/python "torch==2.14.0" "torchvision==0.29.0"
 # Run as non-root: previous root-only image meant any RCE (e.g. via a
 # malicious knowledge-base document parsed by Docling) was root-RCE.
 # Writable dirs (volumes + secret/rag state) are owned by appuser; if you
