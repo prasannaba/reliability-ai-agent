@@ -1,5 +1,7 @@
 # Reliability Copilot
 
+> **Archived — frozen R&D predecessor, read-only.** Active development continues in [`prasannaba/reliability-copilot`](https://github.com/prasannaba/reliability-copilot). This repository is preserved as the public baseline pinned by the hackathon submission (`688b1c7`, v3.9.0).
+
 **Natural language in. Defensible Weibull paper and B-life out. Company documents stay on disk. The language model never invents β, η, or a warranty call.**
 
 A **private reliability engineering agent**: life data and procedures on your machine (or VPC), an OpenAI-compatible LLM you choose, and **MCP tools** that compute every life metric. The model plans and explains. Python produces the plot and the numbers.
