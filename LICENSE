@@ -1,21 +1,55 @@
-MIT License
+Reliability Copilot Noncommercial License v1.0
 
 Copyright (c) 2026 Prasanna P. Badami
+Contact for commercial licensing: prasanna.badami@hotmail.com
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software and associated documentation, including this repository,
+its patch files, scripts, and any assembled application built from them
+(the "Software"), is source-available for noncommercial purposes only.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. NONCOMMERCIAL GRANT
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+   Permission is granted to any person obtaining a copy of the Software
+   to use, copy, modify, merge, publish, and distribute copies of the
+   Software for NONCOMMERCIAL purposes only, subject to including this
+   copyright and permission notice in all copies or substantial portions.
+
+2. COMMERCIAL USE PROHIBITED WITHOUT PERMISSION
+
+   "Commercial use" means any use intended for or directed toward
+   commercial advantage or monetary compensation, including but not
+   limited to:
+   (a) use in or as part of commercial software, products, or services,
+   (b) use in SaaS, hosted, or paid offerings,
+   (c) use in consulting, contracting, or internal business operations,
+   (d) incorporating any part or the whole of the Software into any of
+       the above.
+
+   Commercial use, in whole or in part, requires prior explicit written
+   permission from the copyright holder. Contact the address above to
+   request a commercial license. No commercial rights are granted until
+   you receive such written permission.
+
+3. NO IMPLIED COMMERCIAL RIGHTS
+
+   Mere viewing, forking on GitHub, or downloading for evaluation or
+   noncommercial research does not grant commercial rights.
+
+4. PRIOR LICENSES
+
+   Versions of this Software distributed under the MIT License before
+   2026-11-17 remain available under those MIT terms for those copies.
+   This License applies prospectively to this and future versions and
+   does not retroactively revoke MIT rights already granted for prior
+   snapshots. No new MIT rights are granted after this change.
+
+5. DISCLAIMER
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+   BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+   ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.

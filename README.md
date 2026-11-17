@@ -277,3 +277,16 @@ npx --yes prettier@3 --check "src/**/*.{ts,tsx,css,json}" "package.json" "tsconf
 Ruff is configured in `backend/pyproject.toml`. Prettier options live in `frontend/package.json`.
 
 Reliability math is code. The LLM is the interface, not the oracle.
+
+---
+
+## License
+
+Source-available, noncommercial only — see [LICENSE](LICENSE).
+
+Commercial use of the whole or any part (including use in commercial
+software, SaaS/hosted offerings, or paid consulting/operations) requires
+prior explicit written permission: prasanna.badami@hotmail.com.
+
+Note: versions distributed under MIT before 2026-11-17 keep their MIT
+terms for those copies. This license applies prospectively.
